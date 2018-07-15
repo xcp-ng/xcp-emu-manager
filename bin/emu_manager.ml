@@ -5,7 +5,13 @@ let wait_for_ready in_fd =
 
 let main_parent child_pid in_fd params =
   wait_for_ready in_fd;
-  Unix.close in_fd
+  Unix.close in_fd;
+
+  let sock = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
+  let addr = Unix.ADDR_UNIX
+    Params.(Xenguest.control_path params.common.domid)
+  in
+  Unix.connect sock addr
 
 let main fork params =
   if fork then begin
