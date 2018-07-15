@@ -1,10 +1,19 @@
-let main_parent child_pid params = ()
+let main_parent child_pid in_fd params = ()
 
 let main fork params =
   if fork then begin
+    let in_fd, out_fd = Unix.pipe () in
     match Unix.fork () with
-    | 0         -> Xenguest.exec params
-    | child_pid -> main_parent child_pid params
+    | 0 -> begin
+      Unix.dup2 out_fd Unix.stdout;
+      Unix.close out_fd;
+      Unix.close in_fd;
+      Xenguest.exec params
+    end
+    | child_pid -> begin
+      Unix.close out_fd;
+      main_parent child_pid in_fd params
+    end
   end else
     Xenguest.exec params
 
