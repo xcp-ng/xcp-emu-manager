@@ -3,10 +3,10 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let save sock control_in_fd control_out_fd =
+let save sock control_in_chan control_out_chan =
   ()
 
-let restore sock control_in_fd control_out_fd restore_params =
+let restore sock control_in_chan control_out_chan restore_params =
   ()
 
 let main_parent child_pid xenguest_in_fd params =
@@ -23,11 +23,15 @@ let main_parent child_pid xenguest_in_fd params =
   let control_in_fd  = Fd_send_recv.fd_of_int params.common.control_in_fd in
   let control_out_fd = Fd_send_recv.fd_of_int params.common.control_out_fd in
   let main_fd        = Fd_send_recv.fd_of_int params.common.main_fd in
+
+  let control_in_chan  = Unix.in_channel_of_descr control_in_fd in
+  let control_out_chan = Unix.out_channel_of_descr control_out_fd in
+
   match params.mode with
   | Save ->
-    save sock control_in_fd control_out_fd
+    save sock control_in_chan control_out_chan
   | Restore restore_params ->
-    restore sock control_in_fd control_out_fd restore_params;
+    restore sock control_in_chan control_out_chan restore_params;
 
   Unix.close sock;
   Unix.close main_fd
