@@ -32,3 +32,7 @@ let args_of_restore_params (params : Params.restore_params) = {
 let args_of_params = function
   | Params.Save params    -> args_of_save_params    params
   | Params.Restore params -> args_of_restore_params params
+
+let exec params =
+  let args = args_of_params params in
+  Unix.execv args.path args.args
