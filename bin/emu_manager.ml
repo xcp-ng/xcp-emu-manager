@@ -1,11 +1,11 @@
-let wait_for_ready in_fd =
-  let channel = Unix.in_channel_of_descr in_fd in
+let wait_for_ready xenguest_in_fd =
+  let channel = Unix.in_channel_of_descr xenguest_in_fd in
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let main_parent child_pid in_fd params =
-  wait_for_ready in_fd;
-  Unix.close in_fd;
+let main_parent child_pid xenguest_in_fd params =
+  wait_for_ready xenguest_in_fd;
+  Unix.close xenguest_in_fd;
 
   let sock = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   let addr = Unix.ADDR_UNIX
@@ -15,17 +15,17 @@ let main_parent child_pid in_fd params =
 
 let main fork params =
   if fork then begin
-    let in_fd, out_fd = Unix.pipe () in
+    let xenguest_in_fd, xenguest_out_fd = Unix.pipe () in
     match Unix.fork () with
     | 0 -> begin
-      Unix.dup2 out_fd Unix.stdout;
-      Unix.close out_fd;
-      Unix.close in_fd;
+      Unix.dup2 xenguest_out_fd Unix.stdout;
+      Unix.close xenguest_out_fd;
+      Unix.close xenguest_in_fd;
       Xenguest.exec params
     end
     | child_pid -> begin
-      Unix.close out_fd;
-      main_parent child_pid in_fd params
+      Unix.close xenguest_out_fd;
+      main_parent child_pid xenguest_in_fd params
     end
   end else
     Xenguest.exec params
