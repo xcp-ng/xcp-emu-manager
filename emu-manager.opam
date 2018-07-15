@@ -10,4 +10,5 @@ build: [
 depends: [
   "jbuilder" {build}
   "ezjsonm"
+  "fd-send-recv"
 ]
