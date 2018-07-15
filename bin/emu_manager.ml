@@ -75,23 +75,29 @@ let () =
 
   let open Params in
   let params = match !mode with
-  | "save"    ->
-    Save {
+  | "save" -> {
+    common = {
       control_in_fd  = !control_in_fd;
       control_out_fd = !control_out_fd;
       main_fd        = !main_fd;
       domid          = !domid;
-    }
+    };
+    mode = Save;
+  }
   | "restore" -> begin
     if !store_port   < 0 then failwith "bad store_port";
     if !console_port < 0 then failwith "bad console_port";
-    Restore {
-      control_in_fd  = !control_in_fd;
-      control_out_fd = !control_out_fd;
-      main_fd        = !main_fd;
-      domid          = !domid;
-      store_port     = !store_port;
-      console_port   = !console_port;
+    {
+      common = {
+        control_in_fd  = !control_in_fd;
+        control_out_fd = !control_out_fd;
+        main_fd        = !main_fd;
+        domid          = !domid;
+      };
+      mode = Restore {
+        store_port     = !store_port;
+        console_port   = !console_port;
+      };
     }
   end
   | _ -> failwith "unknown mode" in
