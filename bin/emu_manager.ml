@@ -1,4 +1,11 @@
-let main_parent child_pid in_fd params = ()
+let wait_for_ready in_fd =
+  let channel = Unix.in_channel_of_descr in_fd in
+  if input_line channel <> "Ready"
+  then failwith "unexpected message from child"
+
+let main_parent child_pid in_fd params =
+  wait_for_ready in_fd;
+  Unix.close in_fd
 
 let main fork params =
   if fork then begin
