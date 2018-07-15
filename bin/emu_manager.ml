@@ -1,12 +1,12 @@
-let save params =
-  ()
+let main_parent child_pid params = ()
 
-let restore params =
-  ()
-
-let main = function
-  | Params.Save save_params       -> save save_params
-  | Params.Restore restore_params -> restore restore_params
+let main fork params =
+  if fork then begin
+    match Unix.fork () with
+    | 0         -> Xenguest.exec params
+    | child_pid -> main_parent child_pid params
+  end else
+    Xenguest.exec params
 
 let () =
   let control_in_fd = ref (-1) in
@@ -79,4 +79,4 @@ let () =
     }
   end
   | _ -> failwith "unknown mode" in
-  main params
+  main !fork params
