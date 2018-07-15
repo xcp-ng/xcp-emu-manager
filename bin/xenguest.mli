@@ -14,5 +14,8 @@ type message =
 (** Send a message to xenguest via the supplied socket. *)
 val send : Unix.file_descr -> message -> unit
 
+(** Receive an event from xenguest. *)
+val receive : Unix.file_descr -> string option
+
 (** exec xenguest with the specified parameters. *)
 val exec : Params.params -> unit

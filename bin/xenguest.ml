@@ -33,6 +33,19 @@ let send fd message =
   let (_:string) = IO.really_read_string fd ((String.length in_string) + 1) in
   ()
 
+let receive fd =
+  let chan = Unix.in_channel_of_descr fd in
+  let data = match input_line chan |> Ezjsonm.from_string with
+  | `O [
+    "event", `String "MIGRATION";
+    "data", `O data
+  ] -> data
+  | _ -> []
+  in
+  if List.mem_assoc "result" data
+  then Some (Ezjsonm.get_string (List.assoc "result" data))
+  else None
+
 type args = {
   path: string;
   args: string array;
