@@ -3,6 +3,12 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
+let save sock control_in_fd control_out_fd =
+  ()
+
+let restore sock control_in_fd control_out_fd restore_params =
+  ()
+
 let main_parent child_pid xenguest_in_fd params =
   wait_for_ready xenguest_in_fd;
   Unix.close xenguest_in_fd;
@@ -11,7 +17,20 @@ let main_parent child_pid xenguest_in_fd params =
   let addr = Unix.ADDR_UNIX
     Params.(Xenguest.control_path params.common.domid)
   in
-  Unix.connect sock addr
+  Unix.connect sock addr;
+
+  let open Params in
+  let control_in_fd  = Fd_send_recv.fd_of_int params.common.control_in_fd in
+  let control_out_fd = Fd_send_recv.fd_of_int params.common.control_out_fd in
+  let main_fd        = Fd_send_recv.fd_of_int params.common.main_fd in
+  match params.mode with
+  | Save ->
+    save sock control_in_fd control_out_fd
+  | Restore restore_params ->
+    restore sock control_in_fd control_out_fd restore_params;
+
+  Unix.close sock;
+  Unix.close main_fd
 
 let main fork params =
   if fork then begin
