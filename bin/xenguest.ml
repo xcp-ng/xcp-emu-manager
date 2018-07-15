@@ -1,5 +1,7 @@
 let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 
+let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid
+
 type args = {
   path: string;
   args: string array;
