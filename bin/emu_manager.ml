@@ -1,25 +1,5 @@
 let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 
-type save_params = {
-  control_in_fd: int;
-  control_out_fd: int;
-  main_fd: int;
-  domid: int;
-}
-
-type restore_params = {
-  control_in_fd: int;
-  control_out_fd: int;
-  main_fd: int;
-  domid: int;
-  store_port: int;
-  console_port: int;
-}
-
-type params =
-  | Save of save_params
-  | Restore of restore_params
-
 let save params =
   ()
 
@@ -27,8 +7,8 @@ let restore params =
   ()
 
 let main = function
-  | Save save_params       -> save save_params
-  | Restore restore_params -> restore restore_params
+  | Params.Save save_params       -> save save_params
+  | Params.Restore restore_params -> restore restore_params
 
 let () =
   let control_in_fd = ref (-1) in
@@ -79,6 +59,7 @@ let () =
   if !main_fd        < 0 then failwith "bad fd";
   if !domid          < 0 then failwith "bad domid";
 
+  let open Params in
   let params = match !mode with
   | "save"    ->
     Save {
