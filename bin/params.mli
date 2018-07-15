@@ -6,13 +6,16 @@ type common_params = {
   domid: int;
 }
 
+(** Parameters required for restoring only. *)
+type restore_params = {
+  store_port: int;
+  console_port: int;
+}
+
 (** Mode-specific parameters. *)
 type mode =
   | Save
-  | Restore of {
-    store_port: int;
-    console_port: int;
-  }
+  | Restore of restore_params
 
 (** A type for describing required xenguest behaviour. *)
 type params = {

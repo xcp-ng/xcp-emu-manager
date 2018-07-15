@@ -5,12 +5,14 @@ type common_params = {
   domid: int;
 }
 
+type restore_params = {
+  store_port: int;
+  console_port: int;
+}
+
 type mode =
   | Save
-  | Restore of {
-    store_port: int;
-    console_port: int;
-  }
+  | Restore of restore_params
 
 type params = {
   common: common_params;
