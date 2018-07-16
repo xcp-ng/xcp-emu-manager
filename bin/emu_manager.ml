@@ -71,7 +71,15 @@ let main_parent child_pid xenguest_in_fd params =
     restore sock control_in_chan control_out_chan restore_params;
 
   Unix.close sock;
-  Unix.close main_fd
+  Unix.close main_fd;
+
+  let should_stop = ref false in
+
+  while not !should_stop do
+    let pid, _ = Unix.wait () in
+    if pid = child_pid
+    then should_stop := true
+  done
 
 let main fork params =
   if fork then begin
