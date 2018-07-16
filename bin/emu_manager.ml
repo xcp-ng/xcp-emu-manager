@@ -4,7 +4,23 @@ let wait_for_ready xenguest_in_fd =
   then failwith "unexpected message from child"
 
 let save sock control_in_chan control_out_chan =
-  ()
+  Xenguest.(send sock (Set_args ["pv", "true"]));
+
+  Control.(send control_out_chan Suspend);
+  Control.(expect_done control_in_chan);
+
+  Xenguest.(send sock Migrate_pause);
+  Xenguest.(send sock Migrate_paused);
+
+  Control.(send control_out_chan Prepare);
+  Control.(expect_done control_in_chan);
+
+  Xenguest.(send sock Migrate_nonlive);
+  let (_ : string option) = Xenguest.(receive sock) in
+
+  Control.(send control_out_chan (Result (0, 0)));
+
+  Xenguest.(send sock Quit)
 
 let restore sock control_in_chan control_out_chan restore_params =
   ()
