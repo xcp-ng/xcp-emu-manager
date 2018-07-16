@@ -23,7 +23,28 @@ let save sock control_in_chan control_out_chan =
   Xenguest.(send sock Quit)
 
 let restore sock control_in_chan control_out_chan restore_params =
-  ()
+  let args =
+    let open Params in
+    [
+      "store_port", string_of_int restore_params.store_port;
+      "console_port", string_of_int restore_params.console_port;
+      "pv", "true";
+    ]
+  in
+
+  Xenguest.(send sock (Set_args args));
+
+  let (_ : Control.in_message) =  Control.receive control_in_chan in
+  Xenguest.(send sock Restore);
+
+  let xenstore_mfn, console_mfn = match Xenguest.(receive sock) with
+  | Some result -> Scanf.sscanf result "%d %d" (fun a b -> a, b)
+  | None        -> failwith "no result received"
+  in
+
+  Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)));
+
+  Xenguest.(send sock Quit)
 
 let main_parent child_pid xenguest_in_fd params =
   wait_for_ready xenguest_in_fd;
