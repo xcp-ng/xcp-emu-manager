@@ -65,4 +65,8 @@ let args_of_params {Params.common = common} = {
 
 let exec params =
   let args = args_of_params params in
-  Unix.execv args.path args.args
+  let env = [|
+    "LD_PRELOAD=/usr/libexec/coreutils/libstdbuf.so";
+    "_STDBUF_O=0";
+  |] in
+  Unix.execve args.path args.args env
