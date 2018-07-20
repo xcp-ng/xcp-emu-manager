@@ -3,8 +3,9 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let save sock control_in_chan control_out_chan =
-  Xenguest.(send sock (Set_args ["pv", "true"]));
+let save sock control_in_chan control_out_chan hvm =
+  if not hvm
+  then Xenguest.(send sock (Set_args ["pv", "true"]));
 
   Control.(send control_out_chan Suspend);
   Control.(expect_done control_in_chan);
@@ -22,14 +23,14 @@ let save sock control_in_chan control_out_chan =
 
   Xenguest.(send sock Quit)
 
-let restore sock control_in_chan control_out_chan restore_params =
+let restore sock control_in_chan control_out_chan hvm restore_params =
   let args =
+    let hvm_args = if hvm then [] else ["pv", "true"] in
     let open Params in
     [
       "store_port", string_of_int restore_params.store_port;
       "console_port", string_of_int restore_params.console_port;
-      "pv", "true";
-    ]
+    ] @ hvm_args
   in
 
   Xenguest.(send sock (Set_args args));
@@ -66,9 +67,11 @@ let main_parent child_pid xenguest_in_fd params =
 
   match params.mode with
   | Save ->
-    save sock control_in_chan control_out_chan
+    save
+      sock control_in_chan control_out_chan params.common.hvm
   | Restore restore_params ->
-    restore sock control_in_chan control_out_chan restore_params;
+    restore
+      sock control_in_chan control_out_chan params.common.hvm restore_params;
 
   Unix.close sock;
   Unix.close main_fd;
@@ -149,16 +152,17 @@ let () =
 
   let open Params in
   let params = match !mode with
-  | "save" -> {
+  | "save" | "hvm_save" -> {
     common = {
       control_in_fd  = !control_in_fd;
       control_out_fd = !control_out_fd;
       main_fd        = !main_fd;
       domid          = !domid;
+      hvm            = !mode = "hvm_save";
     };
     mode = Save;
   }
-  | "restore" -> begin
+  | "restore" | "hvm_restore" -> begin
     if !store_port   < 0 then failwith "bad store_port";
     if !console_port < 0 then failwith "bad console_port";
     {
@@ -167,6 +171,7 @@ let () =
         control_out_fd = !control_out_fd;
         main_fd        = !main_fd;
         domid          = !domid;
+        hvm            = !mode = "hvm_restore";
       };
       mode = Restore {
         store_port     = !store_port;

@@ -3,6 +3,7 @@ type common_params = {
   control_out_fd: int;
   main_fd: int;
   domid: int;
+  hvm: bool;
 }
 
 type restore_params = {
