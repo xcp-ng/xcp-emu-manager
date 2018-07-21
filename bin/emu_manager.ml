@@ -64,7 +64,7 @@ let main_parent child_pid xenguest_in_fd params =
     Params.(Xenguest.control_path params.common.domid)
   in
   Unix.connect sock addr;
-  Xenguest.(send sock Migrate_init);
+  Xenguest.(send_init sock main_fd);
 
   match params.mode with
   | Save ->

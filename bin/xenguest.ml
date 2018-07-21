@@ -2,9 +2,15 @@ let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 
 let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid
 
+let send_init fd fd_to_send =
+  let out_json = `O ["execute", `String "migrate_init"] in
+  let out_string = Ezjsonm.to_string out_json in
+  let out_length = String.length out_string in
+  if Fd_send_recv.send_fd fd out_string 0 out_length [] fd_to_send <> out_length
+  then failwith "Failed to initialise xenguest"
+
 type message =
   | Set_args of (string * string) list
-  | Migrate_init
   | Migrate_pause
   | Migrate_paused
   | Migrate_nonlive
@@ -18,7 +24,6 @@ let send fd message =
     let args_json = `O (List.map (fun (k, v) -> (k, `String v)) args) in
     `O ["execute", `String "set_args"; "arguments", args_json]
   end
-  | Migrate_init    -> `O ["execute", `String "migrate_init"]
   | Migrate_pause   -> `O ["execute", `String "migrate_pause"]
   | Migrate_paused  -> `O ["execute", `String "migrate_paused"]
   | Migrate_nonlive -> `O ["execute", `String "migrate_nonlive"]

@@ -1,10 +1,12 @@
 (** Get the path to the xenguest control socket for the specified domid. *)
 val control_path : int -> string
 
+(** Send the migrate_init message along with a file descriptor. *)
+val send_init : Unix.file_descr -> Unix.file_descr -> unit
+
 (** The type of messages which can be sent to xenguest. *)
 type message =
   | Set_args of (string * string) list
-  | Migrate_init
   | Migrate_pause
   | Migrate_paused
   | Migrate_nonlive
