@@ -51,13 +51,6 @@ let main_parent child_pid xenguest_in_fd params =
   wait_for_ready xenguest_in_fd;
   Unix.close xenguest_in_fd;
 
-  let sock = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
-  let addr = Unix.ADDR_UNIX
-    Params.(Xenguest.control_path params.common.domid)
-  in
-  Unix.connect sock addr;
-  Xenguest.(send sock Migrate_init);
-
   let open Params in
   let control_in_fd  = Fd_send_recv.fd_of_int params.common.control_in_fd in
   let control_out_fd = Fd_send_recv.fd_of_int params.common.control_out_fd in
@@ -65,6 +58,13 @@ let main_parent child_pid xenguest_in_fd params =
 
   let control_in_chan  = Unix.in_channel_of_descr control_in_fd in
   let control_out_chan = Unix.out_channel_of_descr control_out_fd in
+
+  let sock = Unix.socket Unix.PF_UNIX Unix.SOCK_STREAM 0 in
+  let addr = Unix.ADDR_UNIX
+    Params.(Xenguest.control_path params.common.domid)
+  in
+  Unix.connect sock addr;
+  Xenguest.(send sock Migrate_init);
 
   match params.mode with
   | Save ->
