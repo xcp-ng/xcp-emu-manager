@@ -4,7 +4,8 @@ type out_message =
   | Result of int * int
 
 let output_line out_chan data =
-  output_string out_chan (Printf.sprintf "%s\n" data)
+  output_string out_chan (Printf.sprintf "%s\n" data);
+  flush out_chan
 
 let send out_chan = function
   | Suspend -> output_line out_chan "suspend:"
