@@ -13,7 +13,7 @@ let send out_chan = function
   | Result (xenstore_mfn, console_mfn) ->
     output_line
       out_chan
-      (Printf.sprintf "result:%d %d" xenstore_mfn console_mfn)
+      (Printf.sprintf "result:xenguest %d %d" xenstore_mfn console_mfn)
 
 let expect_done in_chan =
   match input_line in_chan with
