@@ -3,10 +3,10 @@ let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid
 
 let expect_response fd =
-  let in_json = `O ["return", `O []] in
-  let in_string = Ezjsonm.to_string in_json in
-  let (_:string) = IO.really_read_string fd ((String.length in_string) + 1) in
-  ()
+  let in_chan = Unix.in_channel_of_descr fd in
+  match input_line in_chan |> Ezjsonm.from_string with
+  | `O ["return", `O []] -> ()
+  | _                    -> failwith "bad response from xenguest"
 
 let send_init fd fd_to_send =
   let out_json = `O ["execute", `String "migrate_init"] in
