@@ -2,12 +2,19 @@ let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 
 let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid
 
+let expect_response fd =
+  let in_json = `O ["return", `O []] in
+  let in_string = Ezjsonm.to_string in_json in
+  let (_:string) = IO.really_read_string fd ((String.length in_string) + 1) in
+  ()
+
 let send_init fd fd_to_send =
   let out_json = `O ["execute", `String "migrate_init"] in
   let out_string = Ezjsonm.to_string out_json in
   let out_length = String.length out_string in
   if Fd_send_recv.send_fd fd out_string 0 out_length [] fd_to_send <> out_length
-  then failwith "Failed to initialise xenguest"
+  then failwith "Failed to initialise xenguest";
+  expect_response fd
 
 type message =
   | Set_args of (string * string) list
@@ -31,12 +38,7 @@ let send fd message =
   | Quit            -> `O ["execute", `String "quit"]
   in
   IO.really_write_string fd (Ezjsonm.to_string out_json);
-
-  (* Read the response. *)
-  let in_json = `O ["return", `O []] in
-  let in_string = Ezjsonm.to_string in_json in
-  let (_:string) = IO.really_read_string fd ((String.length in_string) + 1) in
-  ()
+  expect_response fd
 
 let receive fd =
   let chan = Unix.in_channel_of_descr fd in
