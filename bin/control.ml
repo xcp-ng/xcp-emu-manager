@@ -1,6 +1,7 @@
 type out_message =
   | Suspend
   | Prepare
+  | Progress of int
   | Result of int * int
 
 let output_line out_chan data =
@@ -10,6 +11,10 @@ let output_line out_chan data =
 let send out_chan = function
   | Suspend -> output_line out_chan "suspend:"
   | Prepare -> output_line out_chan "prepare:xenguest"
+  | Progress progress ->
+    output_line
+      out_chan
+      (Printf.sprintf "info:\\b\\b\\b\\b%d" progress)
   | Result (xenstore_mfn, console_mfn) ->
     output_line
       out_chan

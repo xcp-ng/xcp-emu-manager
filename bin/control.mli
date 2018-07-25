@@ -1,6 +1,7 @@
 type out_message =
   | Suspend
   | Prepare
+  | Progress of int
   | Result of int * int
 
 val send : out_channel -> out_message -> unit
