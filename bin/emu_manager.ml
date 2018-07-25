@@ -3,7 +3,7 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let save sock control_in_chan control_out_chan hvm =
+let save sock control_in_chan control_out_chan hvm save_params =
   if not hvm
   then Xenguest.(send sock (Set_args ["pv", "true"]));
 
@@ -67,9 +67,9 @@ let main_parent child_pid xenguest_in_fd params =
   Xenguest.(send_init sock main_fd);
 
   match params.mode with
-  | Save ->
+  | Save save_params ->
     save
-      sock control_in_chan control_out_chan params.common.hvm
+      sock control_in_chan control_out_chan params.common.hvm save_params
   | Restore restore_params ->
     restore
       sock control_in_chan control_out_chan params.common.hvm restore_params;
@@ -113,6 +113,7 @@ let () =
 
   let mode = ref "" in
   let fork = ref true in
+  let live = ref false in
 
   Arg.(parse
     [
@@ -142,6 +143,11 @@ let () =
         | "true" -> fork := true
         | _      -> fork := false),
       "Whether to fork";
+      "-live",
+      String (function
+        | "true" -> live := true
+        | _      -> live := false),
+      "Whether to save live, i.e. for a live migration";
     ]
     (fun _ -> ())
     "emu-manager");
@@ -161,7 +167,9 @@ let () =
       domid          = !domid;
       hvm            = !mode = "hvm_save";
     };
-    mode = Save;
+    mode = Save {
+      live = !live
+    };
   }
   | "restore" | "hvm_restore" -> begin
     if !store_port   < 0 then failwith "bad store_port";

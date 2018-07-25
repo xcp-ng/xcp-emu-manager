@@ -6,13 +6,17 @@ type common_params = {
   hvm: bool;
 }
 
+type save_params = {
+  live: bool;
+}
+
 type restore_params = {
   store_port: int;
   console_port: int;
 }
 
 type mode =
-  | Save
+  | Save    of save_params
   | Restore of restore_params
 
 type params = {

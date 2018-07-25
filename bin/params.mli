@@ -7,6 +7,11 @@ type common_params = {
   hvm: bool;
 }
 
+(** Parameters required for saving only. *)
+type save_params = {
+  live: bool;
+}
+
 (** Parameters required for restoring only. *)
 type restore_params = {
   store_port: int;
@@ -15,7 +20,7 @@ type restore_params = {
 
 (** Mode-specific parameters. *)
 type mode =
-  | Save
+  | Save    of save_params
   | Restore of restore_params
 
 (** A type for describing required xenguest behaviour. *)
