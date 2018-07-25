@@ -7,18 +7,23 @@ let save sock control_in_chan control_out_chan hvm save_params =
   if not hvm
   then Xenguest.(send sock (Set_args ["pv", "true"]));
 
-  Control.(send control_out_chan Suspend);
-  Control.(expect_done control_in_chan);
+  if save_params.Params.live
+  then begin
+    ()
+  end else begin
+    Control.(send control_out_chan Suspend);
+    Control.(expect_done control_in_chan);
 
-  Xenguest.(send sock Migrate_pause);
-  Xenguest.(send sock Migrate_paused);
+    Xenguest.(send sock Migrate_pause);
+    Xenguest.(send sock Migrate_paused);
 
-  Control.(send control_out_chan Prepare);
-  Control.(expect_done control_in_chan);
+    Control.(send control_out_chan Prepare);
+    Control.(expect_done control_in_chan);
 
-  Xenguest.(send sock Migrate_nonlive);
+    Xenguest.(send sock Migrate_nonlive)
+  end;
+
   let (_ : string option) = Xenguest.(receive sock) in
-
   Control.(send control_out_chan (Result (0, 0)));
 
   Xenguest.(send sock Quit)
