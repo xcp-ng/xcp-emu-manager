@@ -9,9 +9,12 @@ type message =
   | Set_args of (string * string) list
   | Migrate_pause
   | Migrate_paused
+  | Migrate_live
   | Migrate_nonlive
+  | Migrate_progress
   | Restore
   | Quit
+  | Track_dirty
 
 (** Send a message to xenguest via the supplied socket. *)
 val send : Unix.file_descr -> message -> unit

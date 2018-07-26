@@ -20,9 +20,12 @@ type message =
   | Set_args of (string * string) list
   | Migrate_pause
   | Migrate_paused
+  | Migrate_live
   | Migrate_nonlive
+  | Migrate_progress
   | Restore
   | Quit
+  | Track_dirty
 
 let send fd message =
   (* Write the command. *)
@@ -31,11 +34,14 @@ let send fd message =
     let args_json = `O (List.map (fun (k, v) -> (k, `String v)) args) in
     `O ["execute", `String "set_args"; "arguments", args_json]
   end
-  | Migrate_pause   -> `O ["execute", `String "migrate_pause"]
-  | Migrate_paused  -> `O ["execute", `String "migrate_paused"]
-  | Migrate_nonlive -> `O ["execute", `String "migrate_nonlive"]
-  | Restore         -> `O ["execute", `String "restore"]
-  | Quit            -> `O ["execute", `String "quit"]
+  | Migrate_pause    -> `O ["execute", `String "migrate_pause"]
+  | Migrate_paused   -> `O ["execute", `String "migrate_paused"]
+  | Migrate_live     -> `O ["execute", `String "migrate_live"]
+  | Migrate_nonlive  -> `O ["execute", `String "migrate_nonlive"]
+  | Migrate_progress -> `O ["execute", `String "migrate_progress"]
+  | Restore          -> `O ["execute", `String "restore"]
+  | Quit             -> `O ["execute", `String "quit"]
+  | Track_dirty      -> `O ["execute", `String "track_dirty"]
   in
   IO.really_write_string fd (Ezjsonm.to_string out_json);
   expect_response fd
