@@ -25,9 +25,17 @@ type completion = {
   console_mfn: int;
 }
 
+(** Progress event sent from xenguest during live migration. *)
+type progress = {
+  sent: int;
+  remaining: int;
+  iteration: int;
+}
+
 (** The types of events which can be sent from xenguest. *)
 type event =
   | Completed of completion option
+  | Progress of progress
   | Unknown
 
 (** Receive an event from xenguest. *)

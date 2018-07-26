@@ -51,8 +51,15 @@ type completion = {
   console_mfn: int;
 }
 
+type progress = {
+  sent: int;
+  remaining: int;
+  iteration: int;
+}
+
 type event =
   | Completed of completion option
+  | Progress of progress
   | Unknown
 
 let receive fd =
@@ -69,6 +76,18 @@ let receive fd =
         (fun xenstore_mfn console_mfn -> {xenstore_mfn; console_mfn}))
     with _ ->
       None)
+  | `O [
+    "event", `String "MIGRATION";
+    "data", `O [
+      "sent", `Float sent;
+      "remaining", `Float remaining;
+      "iteration", `Float iteration;
+    ]
+  ] -> Progress {
+    sent = int_of_float sent;
+    remaining = int_of_float remaining;
+    iteration = int_of_float iteration;
+  }
   | _ -> Unknown
 
 type args = {
