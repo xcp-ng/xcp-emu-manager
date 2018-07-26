@@ -23,7 +23,7 @@ let save sock control_in_chan control_out_chan hvm save_params =
     Xenguest.(send sock Migrate_nonlive)
   end;
 
-  let (_ : string option) = Xenguest.(receive sock) in
+  let (_ : Xenguest.event) = Xenguest.(receive sock) in
   Control.(send control_out_chan (Result (0, 0)));
 
   Xenguest.(send sock Quit)
@@ -43,12 +43,12 @@ let restore sock control_in_chan control_out_chan hvm restore_params =
   let (_ : Control.in_message) =  Control.receive control_in_chan in
   Xenguest.(send sock Restore);
 
-  let xenstore_mfn, console_mfn = match Xenguest.(receive sock) with
-  | Some result -> Scanf.sscanf result "%d %d" (fun a b -> a, b)
-  | None        -> failwith "no result received"
+  let () = match Xenguest.(receive sock) with
+  | Xenguest.(Completed (Some {xenstore_mfn; console_mfn})) ->
+    Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)))
+  | _ ->
+    failwith "no result received"
   in
-
-  Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)));
 
   Xenguest.(send sock Quit)
 

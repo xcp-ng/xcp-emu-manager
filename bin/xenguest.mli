@@ -19,8 +19,19 @@ type message =
 (** Send a message to xenguest via the supplied socket. *)
 val send : Unix.file_descr -> message -> unit
 
+(** Event which may be sent from xenguest on completion. *)
+type completion = {
+  xenstore_mfn: int;
+  console_mfn: int;
+}
+
+(** The types of events which can be sent from xenguest. *)
+type event =
+  | Completed of completion option
+  | Unknown
+
 (** Receive an event from xenguest. *)
-val receive : Unix.file_descr -> string option
+val receive : Unix.file_descr -> event
 
 (** exec xenguest with the specified parameters. *)
 val exec : Params.params -> unit

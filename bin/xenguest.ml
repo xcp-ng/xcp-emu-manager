@@ -46,18 +46,30 @@ let send fd message =
   IO.really_write_string fd (Ezjsonm.to_string out_json);
   expect_response fd
 
+type completion = {
+  xenstore_mfn: int;
+  console_mfn: int;
+}
+
+type event =
+  | Completed of completion option
+  | Unknown
+
 let receive fd =
   let chan = Unix.in_channel_of_descr fd in
-  let data = match input_line chan |> Ezjsonm.from_string with
+  match input_line chan |> Ezjsonm.from_string with
   | `O [
     "event", `String "MIGRATION";
-    "data", `O data
-  ] -> data
-  | _ -> []
-  in
-  if List.mem_assoc "result" data
-  then Some (Ezjsonm.get_string (List.assoc "result" data))
-  else None
+    "data", `O (("status", `String "completed") :: rest)
+  ] -> Completed
+    (try
+      let result = Ezjsonm.get_string (List.assoc "result" rest) in
+      Some (Scanf.sscanf
+        result "%d %d"
+        (fun xenstore_mfn console_mfn -> {xenstore_mfn; console_mfn}))
+    with _ ->
+      None)
+  | _ -> Unknown
 
 type args = {
   path: string;
