@@ -51,6 +51,8 @@ let save sock control_in_chan control_out_chan hvm save_params =
   end;
 
   let (_ : Xenguest.event) = Xenguest.(receive sock) in
+  if not save_params.Params.live
+  then Control.(send control_out_chan (Progress 100));
   Control.(send control_out_chan (Result (0, 0)));
 
   Xenguest.(send sock Quit)
