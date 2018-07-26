@@ -9,7 +9,34 @@ let save sock control_in_chan control_out_chan hvm save_params =
 
   if save_params.Params.live
   then begin
-    ()
+    Xenguest.(send sock Track_dirty);
+    Xenguest.(send sock Migrate_progress);
+
+    Control.(send control_out_chan Prepare);
+    Control.(expect_done control_in_chan);
+
+    Xenguest.(send sock Migrate_live);
+
+    (* read and relay progress events. *)
+    let progress = ref 0 in
+    let total    = ref 0 in
+    while !progress < 100 do
+      match Xenguest.receive sock with
+      | Xenguest.(Progress {sent; remaining; iteration}) -> begin
+        if remaining > 0
+        then total := !total + remaining;
+
+        progress := 100 * sent / !total;
+        Control.(send control_out_chan (Progress !progress))
+      end
+      | _ -> ()
+    done;
+
+    Control.(send control_out_chan Suspend);
+    Control.(expect_done control_in_chan);
+
+    Xenguest.(send sock Migrate_pause);
+    Xenguest.(send sock Migrate_paused)
   end else begin
     Control.(send control_out_chan Suspend);
     Control.(expect_done control_in_chan);
