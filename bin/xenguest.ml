@@ -12,7 +12,7 @@ let send_init fd fd_to_send =
   let out_json = `O ["execute", `String "migrate_init"] in
   let out_string = Ezjsonm.to_string out_json in
   let out_length = String.length out_string in
-  if Fd_send_recv.send_fd fd out_string 0 out_length [] fd_to_send <> out_length
+  if Fd_send_recv.send_fd fd (Bytes.of_string out_string) 0 out_length [] fd_to_send <> out_length
   then failwith "Failed to initialise xenguest";
   expect_response fd
 
