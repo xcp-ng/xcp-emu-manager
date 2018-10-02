@@ -149,6 +149,9 @@ let () =
   let fork = ref true in
   let live = ref false in
 
+  (* Currently unused. *)
+  let device_model = ref "" in
+
   Arg.(parse
     [
       "-controlinfd",
@@ -182,6 +185,9 @@ let () =
         | "true" -> live := true
         | _      -> live := false),
       "Whether to save live, i.e. for a live migration";
+      "-dm",
+      Set_string device_model,
+      "Device model";
     ]
     (fun _ -> ())
     "emu-manager");
