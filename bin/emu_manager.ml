@@ -3,14 +3,26 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let save sock control_in_chan control_out_chan hvm save_params =
+let save sock control_in_chan control_out_chan hvm domid save_params =
   if not hvm
   then Xenguest.(send sock (Set_args ["pv", "true"]));
 
   if save_params.Params.live
   then begin
+    let qmp_path = Printf.sprintf "/var/run/xen/qmp-libxl-%d" domid in
+    let qmp_sock = Qmp_protocol.connect qmp_path in
+
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+    Qmp_protocol.write qmp_sock Qmp.(Command (None, Qmp_capabilities));
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+
     Xenguest.(send sock Track_dirty);
     Xenguest.(send sock Migrate_progress);
+
+    Qmp_protocol.write qmp_sock
+      Qmp.(Command (None, Xen_set_global_dirty_log true));
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+    Qmp_protocol.close qmp_sock;
 
     Control.(send control_out_chan Prepare);
     Control.(expect_done control_in_chan);
@@ -103,7 +115,8 @@ let main_parent child_pid xenguest_in_fd params =
   match params.mode with
   | Save save_params ->
     save
-      sock control_in_chan control_out_chan params.common.hvm save_params
+      sock control_in_chan control_out_chan
+      params.common.hvm params.common.domid save_params
   | Restore restore_params ->
     restore
       sock control_in_chan control_out_chan params.common.hvm restore_params;
