@@ -84,13 +84,18 @@ let restore sock control_in_chan control_out_chan hvm restore_params =
   let (_ : Control.in_message) =  Control.receive control_in_chan in
   Xenguest.(send sock Restore);
 
-  let () = match Xenguest.(receive sock) with
-  | Xenguest.(Completed (Some {xenstore_mfn; console_mfn})) ->
-    Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)))
-  | _ ->
-    failwith "no result received"
+  let rec wait_for_completion () =
+    match Unix.select [sock] [] [] 30.0 with
+    | sock' :: _, _, _ when sock = sock' -> begin
+      match Xenguest.receive sock with
+      | Xenguest.(Completed (Some {xenstore_mfn; console_mfn})) ->
+        Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)))
+      | _ -> wait_for_completion ()
+    end
+    | _ -> wait_for_completion ()
   in
 
+  wait_for_completion ();
   Xenguest.(send sock Quit)
 
 let main_parent child_pid xenguest_in_fd params =
