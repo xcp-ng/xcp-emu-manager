@@ -30,16 +30,20 @@ let save sock control_in_chan control_out_chan hvm domid save_params =
     Xenguest.(send sock Migrate_live);
 
     (* read and relay progress events. *)
+    let finished = ref false in
     let progress = ref 0 in
     let total    = ref 0 in
-    while !progress < 100 do
+    while not !finished do
       match Xenguest.receive sock with
       | Xenguest.(Progress {sent; remaining; iteration}) -> begin
         if remaining > 0
         then total := !total + remaining;
 
         progress := 100 * sent / !total;
-        Control.(send control_out_chan (Progress !progress))
+        Control.(send control_out_chan (Progress !progress));
+
+        if iteration > 0 || !progress >= 100
+        then finished := true
       end
       | _ -> ()
     done;
