@@ -10,7 +10,7 @@
 (executables
  ((names (emu_manager))
   (flags (:standard -safe-string))
-  (libraries (ezjsonm fd-send-recv)
+  (libraries (ezjsonm fd-send-recv qmp)
   )
  )
 )

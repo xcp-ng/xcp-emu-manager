@@ -11,4 +11,5 @@ depends: [
   "jbuilder" {build}
   "ezjsonm"
   "fd-send-recv"
+  "qmp"
 ]

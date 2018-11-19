@@ -3,14 +3,26 @@ let wait_for_ready xenguest_in_fd =
   if input_line channel <> "Ready"
   then failwith "unexpected message from child"
 
-let save sock control_in_chan control_out_chan hvm save_params =
+let save sock control_in_chan control_out_chan hvm domid save_params =
   if not hvm
   then Xenguest.(send sock (Set_args ["pv", "true"]));
 
   if save_params.Params.live
   then begin
+    let qmp_path = Printf.sprintf "/var/run/xen/qmp-libxl-%d" domid in
+    let qmp_sock = Qmp_protocol.connect qmp_path in
+
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+    Qmp_protocol.write qmp_sock Qmp.(Command (None, Qmp_capabilities));
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+
     Xenguest.(send sock Track_dirty);
     Xenguest.(send sock Migrate_progress);
+
+    Qmp_protocol.write qmp_sock
+      Qmp.(Command (None, Xen_set_global_dirty_log true));
+    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+    Qmp_protocol.close qmp_sock;
 
     Control.(send control_out_chan Prepare);
     Control.(expect_done control_in_chan);
@@ -18,16 +30,20 @@ let save sock control_in_chan control_out_chan hvm save_params =
     Xenguest.(send sock Migrate_live);
 
     (* read and relay progress events. *)
+    let finished = ref false in
     let progress = ref 0 in
     let total    = ref 0 in
-    while !progress < 100 do
+    while not !finished do
       match Xenguest.receive sock with
       | Xenguest.(Progress {sent; remaining; iteration}) -> begin
         if remaining > 0
         then total := !total + remaining;
 
         progress := 100 * sent / !total;
-        Control.(send control_out_chan (Progress !progress))
+        Control.(send control_out_chan (Progress !progress));
+
+        if iteration > 0 || !progress >= 100
+        then finished := true
       end
       | _ -> ()
     done;
@@ -72,13 +88,18 @@ let restore sock control_in_chan control_out_chan hvm restore_params =
   let (_ : Control.in_message) =  Control.receive control_in_chan in
   Xenguest.(send sock Restore);
 
-  let () = match Xenguest.(receive sock) with
-  | Xenguest.(Completed (Some {xenstore_mfn; console_mfn})) ->
-    Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)))
-  | _ ->
-    failwith "no result received"
+  let rec wait_for_completion () =
+    match Unix.select [sock] [] [] 30.0 with
+    | sock' :: _, _, _ when sock = sock' -> begin
+      match Xenguest.receive sock with
+      | Xenguest.(Completed (Some {xenstore_mfn; console_mfn})) ->
+        Control.(send control_out_chan (Result (xenstore_mfn, console_mfn)))
+      | _ -> wait_for_completion ()
+    end
+    | _ -> wait_for_completion ()
   in
 
+  wait_for_completion ();
   Xenguest.(send sock Quit)
 
 let main_parent child_pid xenguest_in_fd params =
@@ -103,7 +124,8 @@ let main_parent child_pid xenguest_in_fd params =
   match params.mode with
   | Save save_params ->
     save
-      sock control_in_chan control_out_chan params.common.hvm save_params
+      sock control_in_chan control_out_chan
+      params.common.hvm params.common.domid save_params
   | Restore restore_params ->
     restore
       sock control_in_chan control_out_chan params.common.hvm restore_params;
