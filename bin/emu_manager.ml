@@ -1,3 +1,6 @@
+module D = Debug.Make(struct let name = "emu-manager" end)
+open D
+
 let wait_for_ready xenguest_in_fd =
   let channel = Unix.in_channel_of_descr xenguest_in_fd in
   if input_line channel <> "Ready"

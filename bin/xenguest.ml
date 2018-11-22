@@ -1,3 +1,6 @@
+module D = Debug.Make(struct let name = "emu-manager" end)
+open D
+
 let xenguest_path = "/usr/libexec/xen/bin/xenguest"
 
 let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid

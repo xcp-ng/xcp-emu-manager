@@ -12,4 +12,5 @@ depends: [
   "ezjsonm"
   "fd-send-recv"
   "qmp"
+  "xcp"
 ]

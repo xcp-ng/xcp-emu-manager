@@ -1,3 +1,6 @@
+module D = Debug.Make(struct let name = "emu-manager" end)
+open D
+
 type out_message =
   | Suspend
   | Prepare
