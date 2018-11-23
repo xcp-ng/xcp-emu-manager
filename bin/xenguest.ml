@@ -1,4 +1,4 @@
-module D = Debug.Make(struct let name = "emu-manager" end)
+module D = Debug.Make(struct let name = "xcp-emu-manager" end)
 open D
 
 let xenguest_path = "/usr/libexec/xen/bin/xenguest"
@@ -8,7 +8,9 @@ let control_path domid = Printf.sprintf "/var/xen/xenguest/%d/control" domid
 let expect_response fd =
   let in_chan = Unix.in_channel_of_descr fd in
   let rec receive () =
-    match input_line in_chan |> Ezjsonm.from_string with
+    let in_string = input_line in_chan in
+    debug "Xenguest: received %s" in_string;
+    match in_string |> Ezjsonm.from_string with
     | `O ["return", `O []] -> ()
     | `O [
       "event", `String "MIGRATION";
@@ -21,6 +23,7 @@ let expect_response fd =
 let send_init fd fd_to_send =
   let out_json = `O ["execute", `String "migrate_init"] in
   let out_string = Ezjsonm.to_string out_json in
+  debug "Xenguest: sending %s" out_string;
   let out_length = String.length out_string in
   if Fd_send_recv.send_fd fd (Bytes.of_string out_string) 0 out_length [] fd_to_send <> out_length
   then failwith "Failed to initialise xenguest";
@@ -53,7 +56,9 @@ let send fd message =
   | Quit             -> `O ["execute", `String "quit"]
   | Track_dirty      -> `O ["execute", `String "track_dirty"]
   in
-  IO.really_write_string fd (Ezjsonm.to_string out_json);
+  let out_string = Ezjsonm.to_string out_json in
+  debug "Xenguest: sending %s" out_string;
+  IO.really_write_string fd out_string;
   expect_response fd
 
 type completion = {
@@ -74,7 +79,9 @@ type event =
 
 let receive fd =
   let chan = Unix.in_channel_of_descr fd in
-  match input_line chan |> Ezjsonm.from_string with
+  let in_string = input_line chan in
+  debug "Xenguest: received %s" in_string;
+  match in_string |> Ezjsonm.from_string with
   | `O [
     "event", `String "MIGRATION";
     "data", `O (("status", `String "completed") :: rest)

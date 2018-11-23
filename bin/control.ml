@@ -1,4 +1,4 @@
-module D = Debug.Make(struct let name = "emu-manager" end)
+module D = Debug.Make(struct let name = "xcp-emu-manager" end)
 open D
 
 type out_message =
@@ -8,6 +8,7 @@ type out_message =
   | Result of int * int
 
 let output_line out_chan data =
+  debug "Control: sending %s" data;
   output_string out_chan (Printf.sprintf "%s\n" data);
   flush out_chan
 
@@ -32,6 +33,8 @@ type in_message =
   | Restore
 
 let receive in_chan =
-  match input_line in_chan with
+  let data = input_line in_chan in
+  debug "Control: received %s" data;
+  match data with
   | "restore:xenguest" -> Restore
   | _                  -> failwith "bad control message"

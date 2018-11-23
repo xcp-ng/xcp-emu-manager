@@ -1,4 +1,4 @@
-module D = Debug.Make(struct let name = "emu-manager" end)
+module D = Debug.Make(struct let name = "xcp-emu-manager" end)
 open D
 
 let wait_for_ready xenguest_in_fd =
