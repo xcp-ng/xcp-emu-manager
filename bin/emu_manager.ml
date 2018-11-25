@@ -102,8 +102,19 @@ let restore sock control_in_chan control_out_chan hvm restore_params =
     | _ -> wait_for_completion ()
   in
 
-  wait_for_completion ();
-  Xenguest.(send sock Quit)
+  begin
+    try
+      wait_for_completion ();
+    with e ->
+      debug "wait_for_completion failed: %s" (Printexc.to_string e)
+  end;
+
+  begin
+    try
+      Xenguest.(send sock Quit)
+    with e ->
+      debug "quit failed: %s" (Printexc.to_string e)
+  end
 
 let main_parent child_pid xenguest_in_fd params =
   wait_for_ready xenguest_in_fd;
