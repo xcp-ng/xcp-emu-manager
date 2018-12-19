@@ -33,9 +33,11 @@ let save sock control_in_chan control_out_chan hvm domid save_params =
     Xenguest.(send sock Migrate_live);
 
     (* read and relay progress events. *)
-    let finished = ref false in
-    let progress = ref 0 in
-    let total    = ref 0 in
+    let finished       = ref false in
+    let progress       = ref 0 in
+    let total          = ref 0 in
+    let last_iteration = ref 0 in
+
     while not !finished do
       match Xenguest.receive sock with
       | Xenguest.(Progress {sent; remaining; iteration}) -> begin
@@ -45,17 +47,20 @@ let save sock control_in_chan control_out_chan hvm domid save_params =
         progress := 100 * sent / !total;
         Control.(send control_out_chan (Progress !progress));
 
-        if iteration > 0 || !progress >= 100
-        then finished := true
+        if iteration > 0 && !last_iteration = 0
+        then begin
+          Control.(send control_out_chan Suspend);
+          Control.(expect_done control_in_chan);
+
+          Xenguest.(send sock Migrate_pause);
+          Xenguest.(send sock Migrate_paused)
+        end;
+
+        last_iteration := iteration
       end
+      | Xenguest.(Completed _) -> finished := true
       | _ -> ()
-    done;
-
-    Control.(send control_out_chan Suspend);
-    Control.(expect_done control_in_chan);
-
-    Xenguest.(send sock Migrate_pause);
-    Xenguest.(send sock Migrate_paused)
+    done
   end else begin
     Control.(send control_out_chan Suspend);
     Control.(expect_done control_in_chan);
@@ -66,10 +71,10 @@ let save sock control_in_chan control_out_chan hvm domid save_params =
     Control.(send control_out_chan Prepare);
     Control.(expect_done control_in_chan);
 
-    Xenguest.(send sock Migrate_nonlive)
+    Xenguest.(send sock Migrate_nonlive);
+    let (_ : Xenguest.event) = Xenguest.(receive sock) in ()
   end;
 
-  let (_ : Xenguest.event) = Xenguest.(receive sock) in
   if not save_params.Params.live
   then Control.(send control_out_chan (Progress 100));
   Control.(send control_out_chan (Result (0, 0)));
