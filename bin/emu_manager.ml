@@ -12,20 +12,26 @@ let save sock control_in_chan control_out_chan hvm domid save_params =
 
   if save_params.Params.live
   then begin
-    let qmp_path = Printf.sprintf "/var/run/xen/qmp-libxl-%d" domid in
-    let qmp_sock = Qmp_protocol.connect qmp_path in
+    if hvm
+    then begin
+      debug "Initiating QMP";
+      let qmp_path = Printf.sprintf "/var/run/xen/qmp-libxl-%d" domid in
+      let qmp_sock = Qmp_protocol.connect qmp_path in
+      let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+      Qmp_protocol.write qmp_sock Qmp.(Command (None, Qmp_capabilities));
+      let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
 
-    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
-    Qmp_protocol.write qmp_sock Qmp.(Command (None, Qmp_capabilities));
-    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+      Xenguest.(send sock Track_dirty);
+      Xenguest.(send sock Migrate_progress);
 
-    Xenguest.(send sock Track_dirty);
-    Xenguest.(send sock Migrate_progress);
-
-    Qmp_protocol.write qmp_sock
-      Qmp.(Command (None, Xen_set_global_dirty_log true));
-    let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
-    Qmp_protocol.close qmp_sock;
+      Qmp_protocol.write qmp_sock
+        Qmp.(Command (None, Xen_set_global_dirty_log true));
+      let (_ : Qmp.message) = Qmp_protocol.read qmp_sock in
+      Qmp_protocol.close qmp_sock
+    end else begin
+      Xenguest.(send sock Track_dirty);
+      Xenguest.(send sock Migrate_progress);
+    end;
 
     Control.(send control_out_chan Prepare);
     Control.(expect_done control_in_chan);
