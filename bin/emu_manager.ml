@@ -183,6 +183,18 @@ let main fork params =
   end else
     Xenguest.exec params
 
+let wrap f name =
+  try
+    f ();
+    debug "%s completed successfully" name
+  with e -> begin
+    List.iter
+      (fun str -> if str <> "" then debug "%s" str)
+      (String.split_on_char '\n' (Printexc.get_backtrace ()));
+    debug "%s failed - caught %s" name (Printexc.to_string e);
+    raise e
+  end
+
 let () =
   let control_in_fd = ref (-1) in
   let control_out_fd = ref (-1) in
@@ -276,4 +288,4 @@ let () =
     }
   end
   | _ -> failwith "unknown mode" in
-  main !fork params
+  wrap (fun () -> main !fork params) "xcp-emu-manager"
