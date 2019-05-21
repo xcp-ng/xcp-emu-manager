@@ -35,6 +35,8 @@
 
 // =============================================================================
 
+#define EMU_LOG_PHASE() syslog(LOG_DEBUG, "Phase: %s", __func__)
+
 static int emu_manager_process (bool (*cb)(Emu *emu));
 
 // =============================================================================
@@ -625,6 +627,8 @@ int emu_set_stream_busy (Emu *emu, bool status) {
 // EmuManager.
 // =============================================================================
 
+static void emu_manager_termination_timeout_handler () { WaitEmusTermination = false; }
+
 static int emu_manager_poll () {
   // 1. Constructs fds array to poll.
   uint fdCount = 0;
@@ -740,11 +744,60 @@ static int emu_manager_process (bool (*cb)(Emu *emu)) {
   return 0;
 }
 
-static void emu_termination_timeout_handler () { WaitEmusTermination = false; }
+static int emu_manager_request_track () {
+  EMU_LOG_PHASE();
+
+  Emu *emu;
+  foreach (emu, Emus) {
+    if (!emu->flags)
+      continue;
+
+    if (emu->type == EmuTypeEmp) {
+      if (emu_client_send_emp_cmd(emu->client, cmd_track_dirty, NULL) < 0)
+        return -1;
+      if (emu_client_send_emp_cmd(emu->client, cmd_migrate_progress, NULL) < 0)
+        return -1;
+    } else if (emu->type == EmuTypeQmpLibxl) {
+      ArgNode node = { NULL, "enable", "true" };
+      if (emu_client_send_qmp_cmd(emu->client, QmpCommandNumXenSetGlobalDirtyLog, &node) < 0)
+        return -1;
+      if (emu_disconnect(emu) < 0)
+        return -1;
+    }
+  }
+
+  return 0;
+}
+
+static int emu_manager_migrate_live () {
+  EMU_LOG_PHASE();
+
+  Emu *emu;
+  foreach (emu, Emus) {
+    if (!(emu->flags & EMU_FLAG_LIVE))
+      continue;
+
+    if (emu_set_stream_busy(emu, true) < 0)
+      return -1;
+
+    if (control_send_prepare(emu->name) < 0) {
+      if (EmuError != ESHUTDOWN)
+        syslog(LOG_ERR, "Failed to prepare stream for `%s`: `%s`.", emu->name, strerror(EmuError));
+      return -1;
+    }
+
+    if (emu_client_send_emp_cmd(emu->client, cmd_migrate_live, NULL) < 0)
+      return -1;
+  }
+
+  return 0;
+}
 
 // -----------------------------------------------------------------------------
 
-int emu_manager_configure (bool live, int mode) {
+int emu_manager_configure (bool live, EmuMode mode) {
+  EMU_LOG_PHASE();
+
   Emu *emu;
   foreach (emu, Emus) {
     // Close automatically fd stream before call to emu_manager_fork.
@@ -773,6 +826,8 @@ int emu_manager_configure (bool live, int mode) {
 }
 
 int emu_manager_fork (uint domId) {
+  EMU_LOG_PHASE();
+
   Emu *emu;
   foreach (emu, Emus)
   if (emu->pathName && emu->type == EmuTypeEmp && emu_fork_emp_client(emu, domId) < 0)
@@ -781,6 +836,8 @@ int emu_manager_fork (uint domId) {
 }
 
 int emu_manager_connect (uint domId) {
+  EMU_LOG_PHASE();
+
   Emu *emu;
   foreach (emu, Emus)
     if (emu_connect(emu, domId) < 0)
@@ -789,6 +846,8 @@ int emu_manager_connect (uint domId) {
 }
 
 int emu_manager_disconnect () {
+  EMU_LOG_PHASE();
+
   int ret = 0;
   Emu *emu;
   foreach(emu, Emus)
@@ -798,6 +857,8 @@ int emu_manager_disconnect () {
 }
 
 int emu_manager_init () {
+  EMU_LOG_PHASE();
+
   Emu *emu;
   foreach (emu, Emus)
     if (emu_init(emu) < 0)
@@ -806,13 +867,15 @@ int emu_manager_init () {
 }
 
 int emu_manager_wait_termination () {
+  EMU_LOG_PHASE();
+
   uint nChildrenToWait = 0;
   Emu *emu;
   foreach (emu, Emus)
     if (emu->pathName && emu->pid)
       ++nChildrenToWait;
 
-  struct sigaction sigact = { .sa_handler = emu_termination_timeout_handler };
+  struct sigaction sigact = { .sa_handler = emu_manager_termination_timeout_handler };
   sigemptyset(&sigact.sa_mask);
   if (sigaction(SIGALRM, &sigact, 0) < 0) {
     syslog(LOG_ERR, "Failed to ignore SIGALRM: `%s`.", strerror(errno));
@@ -879,6 +942,8 @@ int emu_manager_wait_termination () {
 }
 
 int emu_manager_clean () {
+  EMU_LOG_PHASE();
+
   Emu *emu;
   foreach (emu, Emus) {
     arg_list_free(emu->arguments);
@@ -893,7 +958,7 @@ int emu_manager_clean () {
 // -----------------------------------------------------------------------------
 
 int emu_manager_restore () {
-  syslog(LOG_INFO, "Restoring...");
+  EMU_LOG_PHASE();
 
   uint nEmuToWait = 0;
   Emu *emu;
@@ -924,48 +989,16 @@ int emu_manager_restore () {
 }
 
 int emu_manager_save (bool live) {
-  if (live) {
-    syslog(LOG_DEBUG, "Phase: request_track_emus");
-    Emu *emu;
-    foreach (emu, Emus) {
-      if (!emu->flags)
-        continue;
+  EMU_LOG_PHASE();
 
-      if (emu->type == EmuTypeEmp) {
-        if (emu_client_send_emp_cmd(emu->client, cmd_track_dirty, NULL) < 0)
-          goto fail;
-        if (emu_client_send_emp_cmd(emu->client, cmd_migrate_progress, NULL) < 0)
-          goto fail;
-      } else if (emu->type == EmuTypeQmpLibxl) {
-        ArgNode node = { NULL, "enable", "true" };
-        if (emu_client_send_qmp_cmd(emu->client, QmpCommandNumXenSetGlobalDirtyLog, &node) < 0)
-          goto fail;
-        if (emu_disconnect(emu) < 0)
-          goto fail;
-      }
-    }
-  }
-
-  syslog(LOG_DEBUG, "Phase: migrate_live_emus");
   Emu *emu;
-  foreach (emu, Emus) {
-    if (!(emu->flags & EMU_FLAG_LIVE))
-      continue;
 
-    if (emu_set_stream_busy(emu, true) < 0)
-      goto fail;
+  if (live && emu_manager_request_track() < 0)
+    goto fail;
 
-    if (control_send_prepare(emu->name) < 0) {
-      if (EmuError != ESHUTDOWN)
-        syslog(LOG_ERR, "Failed to prepare stream for `%s`: `%s`.", emu->name, strerror(EmuError));
-      goto fail;
-    }
+  if (emu_manager_migrate_live() < 0)
+    goto fail;
 
-    if (emu_client_send_emp_cmd(emu->client, cmd_migrate_live, NULL) < 0)
-      goto fail;
-  }
-
-  // Wait for live emu migration finished.
   syslog(LOG_DEBUG, "Phase: wait until ready");
   if (emu_manager_process(emu_process_cb_wait_initialized) < 0)
     goto fail;
