@@ -240,7 +240,13 @@ int emu_client_process_events (EmuClient *client) {
     }
     assert(obj);
 
-    syslog(LOG_DEBUG, "Processing emu client event: `%.*s`.", client->tokener->char_offset, jsonBuf);
+    {
+      const int charOffset = client->tokener->char_offset;
+      syslog(LOG_DEBUG, "Processing emu client event: `%.*s`.", charOffset, jsonBuf);
+
+      jsonBuf += charOffset;
+      client->bufSize -= (size_t)charOffset;
+    }
 
     const json_type type = json_object_get_type(obj);
     if (type != json_type_object) {
@@ -249,60 +255,61 @@ int emu_client_process_events (EmuClient *client) {
     }
 
     const struct lh_entry *entry = json_object_get_object(obj)->head;
-    if (entry) {
-      const json_object *eventType = NULL;
-      const json_object *data = NULL;
-      const json_object *qmpValue = NULL;
+    if (!entry) {
+      json_object_put(obj);
+      continue;
+    }
 
-      // TODO: Use for.
-      do {
-        const char *key = entry->k;
-        json_object *value = (json_object *)entry->v;
-        entry = entry->next;
+    const json_object *eventType = NULL;
+    const json_object *data = NULL;
+    const json_object *qmpValue = NULL;
 
-        if (!strcmp(key, "return")) {
-          if (!client->waitingAck) {
-            syslog(LOG_ERR, "Unexpected `return` event from emu client.");
-            error = EINVAL;
-          } else
-          client->waitingAck = false;
-        } else if (!strcmp(key, "error")) {
-          if (!json_object_is_type(value, json_type_string))
-            syslog(LOG_ERR, "Unknown error from emu client: `%s`", json_object_to_json_string(value));
-          else
-            syslog(LOG_ERR, "Error from emu client: `%s`.", json_object_get_string(value));
+    // TODO: Use for.
+    do {
+      const char *key = entry->k;
+      json_object *value = (json_object *)entry->v;
+      entry = entry->next;
+
+      if (!strcmp(key, "return")) {
+        if (!client->waitingAck) {
+          syslog(LOG_ERR, "Unexpected `return` event from emu client.");
           error = EINVAL;
-        } else if (!strcmp(key, "event")) {
-          if (json_object_get_type(value) == json_type_string)
-            eventType = value;
-        } else if (!strcmp(key, "data")) {
-          data = value;
-        } else if (!strcmp(key, "QMP")) {
-          if (json_object_get_type(value) == json_type_object)
-            qmpValue = value;
-        } else if (!strcmp(key, "timestamp")) {
-          syslog(LOG_DEBUG, "Ignoring QMP timestamp.");
-        } else if (json_object_get_type(value) != json_type_object) {
-          syslog(LOG_ERR, "Unexpected key from emu client: `%s`.", key);
-          error = EINVAL;
-        }
-      } while (entry && !error);
-
-      if (!error) {
-        if (!eventType) {
-          if (data) {
-            syslog(LOG_ERR, "Emu client sent data without event!");
-            error = EINVAL;
-          } else if (qmpValue && client->eventCb)
-            (*client->eventCb)(client, "QMP", qmpValue);
-        } else if (client->eventCb)
-          (*client->eventCb)(client, json_object_get_string((json_object *)eventType), data);
+        } else
+        client->waitingAck = false;
+      } else if (!strcmp(key, "error")) {
+        if (!json_object_is_type(value, json_type_string))
+          syslog(LOG_ERR, "Unknown error from emu client: `%s`", json_object_to_json_string(value));
+        else
+          syslog(LOG_ERR, "Error from emu client: `%s`.", json_object_get_string(value));
+        error = EINVAL;
+      } else if (!strcmp(key, "event")) {
+        if (json_object_get_type(value) == json_type_string)
+          eventType = value;
+      } else if (!strcmp(key, "data")) {
+        data = value;
+      } else if (!strcmp(key, "QMP")) {
+        if (json_object_get_type(value) == json_type_object)
+          qmpValue = value;
+      } else if (!strcmp(key, "timestamp")) {
+        syslog(LOG_DEBUG, "Ignoring QMP timestamp.");
+      } else if (json_object_get_type(value) != json_type_object) {
+        syslog(LOG_ERR, "Unexpected key from emu client: `%s`.", key);
+        error = EINVAL;
       }
+    } while (entry && !error);
+
+    if (!error) {
+      if (!eventType) {
+        if (data) {
+          syslog(LOG_ERR, "Emu client sent data without event!");
+          error = EINVAL;
+        } else if (qmpValue && client->eventCb)
+          (*client->eventCb)(client, "QMP", qmpValue);
+      } else if (client->eventCb)
+        (*client->eventCb)(client, json_object_get_string((json_object *)eventType), data);
     }
 
     json_object_put(obj);
-    jsonBuf += client->tokener->char_offset;
-    client->bufSize -= (size_t)client->tokener->char_offset;
   } while (client->bufSize && !error);
 
   memmove(client->buf, jsonBuf, client->bufSize);
