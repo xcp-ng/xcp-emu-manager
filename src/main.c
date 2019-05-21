@@ -267,19 +267,15 @@ int main (int argc, char *argv[]) {
 
   int error = 0;
 
-  syslog(LOG_DEBUG, "Phase: emu_manager_configure");
   if (emu_manager_configure(live, mode) < 0)
     goto fail;
 
-  syslog(LOG_DEBUG, "Phase: emu_manager_fork");
   if (emu_manager_fork(domId) < 0)
     goto fail;
 
-  syslog(LOG_DEBUG, "Phase: emu_manager_connect");
   if (emu_manager_connect(domId) < 0)
     goto fail;
 
-  syslog(LOG_DEBUG, "Phase: emu_manager_init");
   if (emu_manager_init() < 0)
     goto fail;
 
@@ -297,7 +293,6 @@ fail:
   error = EmuError;
 
 end:
-  syslog(LOG_DEBUG, "Phase: emu_manager_disconnect");
   if (emu_manager_disconnect() < 0 && !error)
     error = EmuError; // Update error only if there is no previous error!
 

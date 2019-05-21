@@ -29,23 +29,23 @@ extern __thread int EmuError;
 // Emu.
 // =============================================================================
 
-enum EmuType {
+typedef enum EmuType {
   EmuTypeEmp,
   EmuTypeQmpLibxl
-};
+} EmuType;
 
-enum EmuMode {
+typedef enum EmuMode {
   EmuModeHvmSave,
   EmuModeSave,
   EmuModeHvmRestore,
   EmuModeRestore
-};
+} EmuMode;
 
-enum EmuErrorOffset {
+typedef enum EmuErrorOffset {
   EmuErrorDisconnected = -2,
   EmuErrorKilled = -3,
   EmuErrorExitedWithErr = -4
-};
+} EmuErrorOffset;
 
 // TODO: Find better names and complete.
 #define EMU_FLAG_ENABLED (1 << 0)
@@ -125,9 +125,7 @@ int emu_set_stream_busy (Emu *emu, bool status);
 // EmuManager.
 // =============================================================================
 
-// TODO: Add an emu_manager_start (bool live, int mode, uint domId)
-// and remove public fonctions after this point.
-int emu_manager_configure (bool live, int mode);
+int emu_manager_configure (bool live, EmuMode mode);
 
 int emu_manager_fork (uint domId);
 
