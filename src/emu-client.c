@@ -127,7 +127,7 @@ int emu_client_create (EmuClient **client, EmuClientCb eventCb, Emu *emu) {
   return 0;
 
 fail:
-  syslog(LOG_ERR, "No enough memory to create EmuClient.");
+  syslog(LOG_ERR, "Not enough memory to create EmuClient.");
   free(*client);
   EmuError = errno;
   return -1;
@@ -184,7 +184,7 @@ int emu_client_connect (EmuClient *client, const char *path) {
 int emu_client_receive_events (EmuClient *client, int timeout) {
   assert(client->bufSize <= sizeof client->buf);
   if (client->bufSize == sizeof client->buf) {
-    syslog(LOG_ERR, "No enough space to read from EmuClient.");
+    syslog(LOG_ERR, "Not enough space to read from EmuClient.");
     EmuError = ENOSPC;
     return -1;
   }

@@ -43,7 +43,7 @@ static struct {
 static inline int control_recv (int timeout) {
   assert(Xenopsd.bufSize <= sizeof Xenopsd.bufIn);
   if (Xenopsd.bufSize == sizeof Xenopsd.bufIn) {
-    syslog(LOG_ERR, "No enough space to read from xenopsd.");
+    syslog(LOG_ERR, "Not enough space to read from xenopsd.");
     EmuError = ENOSPC;
     return -1;
   }
