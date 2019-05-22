@@ -838,12 +838,11 @@ static inline int emu_manager_migrate_non_live () {
     if (
       emu_set_stream_busy(emu, true) < 0 ||
       control_send_prepare(emu->name) < 0 ||
-      control_receive_and_process_messages(120000) < 0 ||
       emu_client_send_emp_cmd(emu->client, cmd_migrate_nonlive, NULL) < 0
     )
       return -1;
 
-    while (emu->flags != EMU_STATE_MIGRATION_DONE) {
+    while (emu->state != EMU_STATE_MIGRATION_DONE) {
       if (emu_manager_poll() < 0 && EmuError != ETIME) {
         syslog(LOG_ERR, "Error waiting for events: `%s`.", strerror(EmuError));
         return -1;
