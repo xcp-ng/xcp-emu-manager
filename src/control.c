@@ -130,7 +130,7 @@ static inline int control_process_messages () {
       if (!emu) {
         syslog(LOG_ERR, "Unable to restore from xenopsd for unknown emu: `%s`.", message + sizeof restore - 1);
         error = EINVAL;
-      } else if (emu->state != EMU_STATE_INITIALIZED) {
+      } else if (emu->state == EMU_STATE_RESTORING) {
         syslog(LOG_ERR, "Request to restore emu `%s` already in progress.", emu->name);
         error = EINVAL;
       } else {

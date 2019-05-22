@@ -23,7 +23,53 @@
 
 // =============================================================================
 
+// Like a errno variable but used for emu errors.
 extern __thread int EmuError;
+
+// =============================================================================
+// Emu flags.
+// =============================================================================
+
+// See: https://github.com/xcp-ng-rpms/libempserver (emp.h)
+
+// Should we use this emu during the migration process or not?
+#define EMU_FLAG_ENABLED (1 << 0)
+
+// Emu accept live migration, i.e.: Start migration while guest is still running.
+#define EMU_FLAG_MIGRATE_LIVE (1 << 1)
+
+// It's necessary to wait emu after live migration success.
+// Live stage is done when it remains very few dirty pages to move.
+#define EMU_FLAG_WAIT_LIVE_STAGE_DONE (1 << 2)
+
+// Request the pause status for one emu. I.e. no data can be written by this emu.
+// Must be used after a migrate live call to migrate the remaining dirty pages.
+#define EMU_FLAG_MIGRATE_PAUSED (1 << 3)
+
+// Emu is migrated directly. More violent than live mode.
+#define EMU_FLAG_MIGRATE_NON_LIVE (1 << 5)
+
+// =============================================================================
+// Emu states.
+// =============================================================================
+
+// Emu must be initialized. It depends of the emu type like a QMP connection.
+#define EMU_STATE_UNINITIALIZED 0
+
+// Emu is initialized. :)
+#define EMU_STATE_INITIALIZED 1
+
+// Emu is being restoring...
+#define EMU_STATE_RESTORING 2
+
+// Live stage is done. => We can set the pause status on this emu and migrate the remaining dirty pages.
+#define EMU_STATE_LIVE_STAGE_DONE 3
+
+// Migration is a success. \o/
+#define EMU_STATE_MIGRATION_DONE 4
+
+// Nothing to do after that.
+#define EMU_STATE_COMPLETED 5
 
 // =============================================================================
 // Emu.
@@ -47,29 +93,19 @@ typedef enum EmuErrorOffset {
   EmuErrorExitedWithErr = -4
 } EmuErrorOffset;
 
-// TODO: Find better names and complete.
-#define EMU_FLAG_ENABLED (1 << 0)
-#define EMU_FLAG_LIVE (1 << 1)
-#define EMU_FLAG_FIND_NAME (1 << 2)
-#define EMU_FLAG_PAUSE (1 << 3)
-#define EMU_FLAG_MIGRATE_PAUSED (1 << 4)
-#define EMU_FLAG_NON_LIVE (1 << 5)
-
-// TODO: Find better names and complete.
-#define EMU_STATE_UNINITIALIZED 0
-#define EMU_STATE_INITIALIZED 1
-#define EMU_STATE_RESTORING 2
-#define EMU_STATE_LIVE_STAGE_DONE 3
-#define EMU_STATE_RESULT_AVAILABLE 4
-#define EMU_STATE_COMPLETED 5
+// -----------------------------------------------------------------------------
 
 typedef struct ArgNode ArgNode;
 typedef struct EmuClient EmuClient;
 typedef struct EmuStream EmuStream;
 
+// -----------------------------------------------------------------------------
+
 // Used by source emu-manager when RAM data is transferred.
 typedef struct EmuMigrationProgress {
-  char *eventResult;
+  char *result; // Result to send via xenopsd. (Progress bar)
+
+  // Data (RAM) sent and remaining data.
   int64_t remaining;
   int64_t sent;
 
@@ -87,6 +123,8 @@ typedef struct EmuMigrationProgress {
   int64_t fakeTotal;
 } EmuMigrationProgress;
 
+// -----------------------------------------------------------------------------
+
 typedef struct Emu {
   const char *name;
   const char *pathName;
@@ -101,10 +139,10 @@ typedef struct Emu {
   bool isFirstFailedEmu;
   ArgNode *arguments;
 
-  // TODO: Maybe use a union of two structs: for emp and qmp.
-  bool qmpConnectionEstablished;
-
   EmuMigrationProgress progress;
+
+  // Only used by QMP libxl emu.
+  bool qmpConnectionEstablished;
 } Emu;
 
 // -----------------------------------------------------------------------------
