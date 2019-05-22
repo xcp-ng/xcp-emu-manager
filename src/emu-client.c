@@ -107,6 +107,16 @@ static inline int emu_client_send_cmd (EmuClient *client, const char *command, i
   return 0;
 }
 
+static int emu_client_json_check_type (const char *key, json_object *value, json_type expectedType) {
+  const json_type currentType = json_object_get_type(value);
+  if (currentType != expectedType) {
+    syslog(LOG_ERR, "Unexpected key type from emu client `%s`. (Current=%d, Expected=%d)", key, currentType, expectedType);
+    EmuError = EINVAL;
+    return -1;
+  }
+  return 0;
+}
+
 // -----------------------------------------------------------------------------
 
 int emu_client_create (EmuClient **client, EmuClientCb eventCb, Emu *emu) {
@@ -254,21 +264,14 @@ int emu_client_process_events (EmuClient *client) {
       break;
     }
 
-    const struct lh_entry *entry = json_object_get_object(obj)->head;
-    if (!entry) {
-      json_object_put(obj);
-      continue;
-    }
-
     const json_object *eventType = NULL;
     const json_object *data = NULL;
     const json_object *qmpValue = NULL;
 
-    // TODO: Use for.
-    do {
+    const struct lh_entry *head = json_object_get_object(obj)->head;
+    for (const struct lh_entry *entry = head; entry && !error; entry = entry->next) {
       const char *key = entry->k;
       json_object *value = (json_object *)entry->v;
-      entry = entry->next;
 
       if (!strcmp(key, "return")) {
         if (!client->waitingAck) {
@@ -283,22 +286,23 @@ int emu_client_process_events (EmuClient *client) {
           syslog(LOG_ERR, "Error from emu client: `%s`.", json_object_get_string(value));
         error = EINVAL;
       } else if (!strcmp(key, "event")) {
-        if (json_object_get_type(value) == json_type_string)
+        if (emu_client_json_check_type(key, value, json_type_string) > -1)
           eventType = value;
       } else if (!strcmp(key, "data")) {
         data = value;
       } else if (!strcmp(key, "QMP")) {
-        if (json_object_get_type(value) == json_type_object)
+        if (emu_client_json_check_type(key, value, json_type_object) > -1)
           qmpValue = value;
       } else if (!strcmp(key, "timestamp")) {
         syslog(LOG_DEBUG, "Ignoring QMP timestamp.");
-      } else if (json_object_get_type(value) != json_type_object) {
+      } else {
         syslog(LOG_ERR, "Unexpected key from emu client: `%s`.", key);
         error = EINVAL;
       }
-    } while (entry && !error);
+    }
 
-    if (!error) {
+    // If object contains keys and if there is no error, we can call eventCb.
+    if (head && !error) {
       if (!eventType) {
         if (data) {
           syslog(LOG_ERR, "Emu client sent data without event!");
