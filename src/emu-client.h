@@ -25,12 +25,10 @@
 
 // =============================================================================
 
+typedef enum command_num EmpCommandNum;
 typedef struct ArgNode ArgNode;
 typedef struct Emu Emu;
 typedef struct EmuClient EmuClient;
-
-// TODO: Add a Emp prefix in the emp library.
-typedef enum command_num EmpCommandNum;
 
 typedef int (*EmuClientCb)(EmuClient *client, const char *eventType, const json_object *obj);
 
