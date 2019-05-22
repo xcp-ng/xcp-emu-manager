@@ -76,7 +76,6 @@ static volatile sig_atomic_t WaitEmusTermination;
 // Emu.
 // =============================================================================
 
-// TODO: Maybe use it in emu-client.c
 static int emu_json_check_type (const char *key, json_object *value, json_type expectedType) {
   const json_type currentType = json_object_get_type(value);
   if (currentType != expectedType) {
@@ -172,11 +171,9 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
 
   EmuMigrationProgress *progress = &client->emu->progress;
 
-  // TODO: Use for.
-  do {
+  for (; entry; entry = entry->next) {
     const char *key = entry->k;
     json_object *value = (json_object *)entry->v;
-    entry = entry->next;
 
     if (!strcmp(key, "status")) {
       if (emu_json_check_type(key, value, json_type_string) < 0)
@@ -217,12 +214,12 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
       else if (!strcmp(key, "iteration"))
         iterationValue = json_object_get_int(value);
       else {
-        syslog(LOG_ERR, "Unexpected event data: `%s`", key);
+        syslog(LOG_ERR, "Unexpected event data key: `%s`", key);
         EmuError = EINVAL;
         return -1;
       }
     }
-  } while (entry);
+  }
 
   if (iterationValue < 0 && remainingValue < 0)
     return 0;
