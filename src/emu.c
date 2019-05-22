@@ -667,7 +667,7 @@ static int emu_manager_poll () {
   syslog(LOG_DEBUG, "Polling %d socks...", fdCount);
 
   // 2. Poll!
-  const XcpError ret = poll(fds, fdCount, 30000);
+  const XcpError ret = xcp_poll(fds, fdCount, 30000);
   if (ret == XCP_ERR_TIMEOUT) {
     EmuError = ETIME;
     return -1;
