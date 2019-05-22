@@ -52,6 +52,9 @@ typedef struct EmuStream {
 
 __thread int EmuError;
 
+// All supported emus.
+// By default only xenguest is enabled.
+// qemu is enabled here: https://github.com/xapi-project/xenopsd/blob/ddc965e3d5bcdb2a77c387237a9ea77eddfc3b43/xc/domain.ml#L874
 static Emu Emus[] = {
   {
     .name = "xenguest",
@@ -59,14 +62,14 @@ static Emu Emus[] = {
     .type = EmuTypeEmp,
     .flags = EMU_FLAG_ENABLED | EMU_FLAG_LIVE | EMU_FLAG_FIND_NAME | EMU_FLAG_PAUSE | EMU_FLAG_MIGRATE_PAUSED,
     .state = EMU_STATE_INITIALIZED,
-    .progress = { .fakeTotal = 1024 * 1024 } // TODO: Try other values if necessary.
+    .progress = { .fakeTotal = 1024 * 1024 }
   }, {
     .name = "qemu",
     .pathName = NULL,
     .type = EmuTypeQmpLibxl,
     .flags = EMU_FLAG_LIVE | EMU_FLAG_PAUSE | EMU_FLAG_MIGRATE_PAUSED,
     .state = EMU_STATE_UNINITIALIZED,
-    .progress = { .fakeTotal = 640 * 1024 } // TODO: Try other values if necessary.
+    .progress = { .fakeTotal = 640 * 1024 }
   }
 };
 
@@ -119,8 +122,6 @@ static int emu_manager_send_progress () {
 // -----------------------------------------------------------------------------
 
 static bool emu_process_cb_wait_qmp_libxl_initialization (Emu *emu) {
-  // TODO: Maybe return true when success instead of false.
-
   if (emu->type != EmuTypeQmpLibxl)
     return false; // Initialized because it's not a QMP libxl emu.
 
@@ -652,7 +653,7 @@ static int emu_manager_poll () {
 
   if (fdCount > XCP_ARRAY_LEN(fds)) {
     syslog(LOG_ERR, "Too many fds to poll!");
-    EmuError = EINVAL; // TODO: Maybe find a better error.
+    EmuError = EINVAL;
     return -1;
   }
 
@@ -805,7 +806,7 @@ int emu_manager_configure (bool live, EmuMode mode) {
     }
 
     if (!(emu->flags & EMU_FLAG_ENABLED)) {
-      emu->flags = 0;
+      emu->flags = 0; // Reset all flags. Must easy to check instead of: `flags & EMU_FLAG_ENABLED`.
       continue;
     }
     syslog(LOG_INFO, "Emu `%s` is enabled.", emu->name);
