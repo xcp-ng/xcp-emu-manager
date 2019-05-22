@@ -21,7 +21,7 @@
 // =============================================================================
 
 typedef enum QmpCommandNum {
-  QmpCommandNumCapacilities,
+  QmpCommandNumCapabilities,
   QmpCommandNumXenSetGlobalDirtyLog
 } QmpCommandNum;
 

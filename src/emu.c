@@ -52,7 +52,7 @@ typedef struct EmuStream {
 
 __thread int EmuError;
 
-// All supported emus.
+// All supported and used emus.
 // By default only xenguest is enabled.
 // qemu is enabled here: https://github.com/xapi-project/xenopsd/blob/ddc965e3d5bcdb2a77c387237a9ea77eddfc3b43/xc/domain.ml#L874
 static Emu Emus[] = {
@@ -60,14 +60,20 @@ static Emu Emus[] = {
     .name = "xenguest",
     .pathName = "/usr/libexec/xen/bin/xenguest",
     .type = EmuTypeEmp,
-    .flags = EMU_FLAG_ENABLED | EMU_FLAG_LIVE | EMU_FLAG_FIND_NAME | EMU_FLAG_PAUSE | EMU_FLAG_MIGRATE_PAUSED,
+    .flags =
+      EMU_FLAG_ENABLED |
+      EMU_FLAG_MIGRATE_LIVE |
+      EMU_FLAG_WAIT_LIVE_STAGE_DONE |
+      EMU_FLAG_MIGRATE_PAUSED,
     .state = EMU_STATE_INITIALIZED,
     .progress = { .fakeTotal = 1024 * 1024 }
   }, {
     .name = "qemu",
     .pathName = NULL,
     .type = EmuTypeQmpLibxl,
-    .flags = EMU_FLAG_LIVE | EMU_FLAG_PAUSE | EMU_FLAG_MIGRATE_PAUSED,
+    .flags =
+      EMU_FLAG_MIGRATE_LIVE |
+      EMU_FLAG_MIGRATE_PAUSED,
     .state = EMU_STATE_UNINITIALIZED,
     .progress = { .fakeTotal = 640 * 1024 }
   }
@@ -120,6 +126,8 @@ static int emu_manager_send_progress () {
 }
 
 // -----------------------------------------------------------------------------
+// Emu process callbacks.
+// -----------------------------------------------------------------------------
 
 static bool emu_process_cb_wait_qmp_libxl_initialization (Emu *emu) {
   if (emu->type != EmuTypeQmpLibxl)
@@ -129,8 +137,9 @@ static bool emu_process_cb_wait_qmp_libxl_initialization (Emu *emu) {
     // QMP connection is established but we must execute "qmp_capabilities"
     // to enter command mode.
     if (emu->state == EMU_STATE_UNINITIALIZED) {
-      // TODO: Check return.
-      emu_client_send_qmp_cmd(emu->client, QmpCommandNumCapacilities, NULL);
+      // It's not necessary to check the return, after the next send command
+      // an error must be returned.
+      emu_client_send_qmp_cmd(emu->client, QmpCommandNumCapabilities, NULL);
       emu->state = EMU_STATE_INITIALIZED;
     }
 
@@ -142,21 +151,19 @@ static bool emu_process_cb_wait_qmp_libxl_initialization (Emu *emu) {
   return true;
 }
 
-// TODO: Rename
-static bool emu_process_cb_wait_live_finished (Emu *emu) {
-  return (emu->flags & EMU_FLAG_LIVE) && emu->state != EMU_STATE_RESULT_AVAILABLE;
+static bool emu_process_cb_wait_live_stage_done (Emu *emu) {
+  return (emu->flags & EMU_FLAG_WAIT_LIVE_STAGE_DONE) && emu->state != EMU_STATE_LIVE_STAGE_DONE;
 }
 
-// TODO: Rename
-static bool emu_process_cb_wait_initialized (Emu *emu) {
-  return (emu->flags & EMU_FLAG_FIND_NAME) && emu->state != EMU_STATE_LIVE_STAGE_DONE;
+static bool emu_process_cb_wait_migrate_live_finished (Emu *emu) {
+  return (emu->flags & EMU_FLAG_MIGRATE_LIVE) && emu->state != EMU_STATE_MIGRATION_DONE;
 }
 
 // -----------------------------------------------------------------------------
+// Emu client event callbacks.
+// -----------------------------------------------------------------------------
 
 static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, const json_object *obj) {
-  syslog(LOG_DEBUG, "Processing emp event from `%s`.", client->emu->name);
-
   if (strcmp(eventType, "MIGRATION")) {
     syslog(LOG_ERR, "Unknown event type: `%s`.", eventType);
     EmuError = EINVAL;
@@ -188,18 +195,18 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
       }
 
       syslog(LOG_INFO, "Emu `%s` is completed.", client->emu->name);
-      client->emu->state = EMU_STATE_RESULT_AVAILABLE;
+      client->emu->state = EMU_STATE_MIGRATION_DONE;
       if (emu_set_stream_busy(client->emu, false) < 0)
         return -1;
     } else if (!strcmp(key, "result")) {
       if (emu_json_check_type(key, value, json_type_string) < 0)
         return -1;
 
-      const char *eventResult = json_object_get_string(value);
-      syslog(LOG_DEBUG, "Emu %s received event result: `%s`.", client->emu->name, eventResult);
+      const char *result = json_object_get_string(value);
+      syslog(LOG_DEBUG, "Emu %s received result: `%s`.", client->emu->name, result);
 
-      free(progress->eventResult);
-      if (!(progress->eventResult = strdup(eventResult))) {
+      free(progress->result);
+      if (!(progress->result = strdup(result))) {
         syslog(LOG_ERR, "Failed to copy event result buffer.");
         EmuError = errno;
         return -1;
@@ -246,12 +253,13 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
     sentProgress
   );
 
+  // TODO: Check better remaining value.
   if (
     iterationValue > 0 &&
     (remainingValue <= 50 || iterationValue >= 4) &&
     client->emu->state != EMU_STATE_LIVE_STAGE_DONE
   ) {
-    syslog(LOG_INFO, "`%s` live stage is done", client->emu->name);
+    syslog(LOG_INFO, "`%s` live stage is done!", client->emu->name);
     client->emu->state = EMU_STATE_LIVE_STAGE_DONE;
   }
 
@@ -261,7 +269,6 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
 static int emu_client_event_cb_qmp_libxl (EmuClient *client, const char *eventType, const json_object *obj) {
   XCP_UNUSED(obj);
 
-  syslog(LOG_DEBUG, "Processing event from QMP client.");
   if (!strcmp(eventType, "QMP")) {
     syslog(LOG_INFO, "Got QMP version negotiation.");
     client->emu->qmpConnectionEstablished = true;
@@ -742,7 +749,11 @@ static int emu_manager_process (bool (*cb)(Emu *emu)) {
   return 0;
 }
 
-static int emu_manager_request_track () {
+// -----------------------------------------------------------------------------
+// Subphases used by emu_manager_save.
+// -----------------------------------------------------------------------------
+
+static inline int emu_manager_request_track () {
   EMU_LOG_PHASE();
 
   Emu *emu;
@@ -767,13 +778,13 @@ static int emu_manager_request_track () {
   return 0;
 }
 
-static int emu_manager_migrate_live () {
+static inline int emu_manager_migrate_live () {
   EMU_LOG_PHASE();
 
   Emu *emu;
   foreach (emu, Emus) {
-    if (!(emu->flags & EMU_FLAG_LIVE))
-      continue;
+    if (!(emu->flags & EMU_FLAG_MIGRATE_LIVE))
+      continue; // Nothing to do is current emu does not support live migration.
 
     if (emu_set_stream_busy(emu, true) < 0)
       return -1;
@@ -786,6 +797,60 @@ static int emu_manager_migrate_live () {
 
     if (emu_client_send_emp_cmd(emu->client, cmd_migrate_live, NULL) < 0)
       return -1;
+  }
+
+  return 0;
+}
+
+static inline int emu_manager_wait_live_stage_done () {
+  EMU_LOG_PHASE();
+  return emu_manager_process(emu_process_cb_wait_live_stage_done);
+}
+
+static inline int emu_manager_migrate_paused () {
+  EMU_LOG_PHASE();
+
+  Emu *emu;
+  foreach (emu, Emus)
+    if ((emu->flags & EMU_FLAG_MIGRATE_PAUSED) && emu_client_send_emp_cmd(emu->client, cmd_migrate_pause, NULL) < 0)
+      return -1;
+
+  foreach (emu, Emus)
+    if ((emu->flags & EMU_FLAG_MIGRATE_PAUSED) && emu_client_send_emp_cmd(emu->client, cmd_migrate_paused, NULL) < 0)
+      return -1;
+
+  return 0;
+}
+
+static inline int emu_manager_wait_migrate_live_finished () {
+  EMU_LOG_PHASE();
+  return emu_manager_process(emu_process_cb_wait_migrate_live_finished);
+}
+
+static inline int emu_manager_migrate_non_live () {
+  EMU_LOG_PHASE();
+
+  Emu *emu;
+  foreach (emu, Emus) {
+    if (!(emu->flags & EMU_FLAG_MIGRATE_NON_LIVE))
+      continue;
+
+    if (
+      emu_set_stream_busy(emu, true) < 0 ||
+      control_send_prepare(emu->name) < 0 ||
+      control_receive_and_process_messages(120000) < 0 ||
+      emu_client_send_emp_cmd(emu->client, cmd_migrate_nonlive, NULL) < 0
+    )
+      return -1;
+
+    while (emu->flags != EMU_STATE_MIGRATION_DONE) {
+      if (emu_manager_poll() < 0 && EmuError != ETIME) {
+        syslog(LOG_ERR, "Error waiting for events: `%s`.", strerror(EmuError));
+        return -1;
+      }
+      if (emu_manager_send_progress() < 0)
+        return -1;
+    }
   }
 
   return 0;
@@ -806,15 +871,15 @@ int emu_manager_configure (bool live, EmuMode mode) {
     }
 
     if (!(emu->flags & EMU_FLAG_ENABLED)) {
-      emu->flags = 0; // Reset all flags. Must easy to check instead of: `flags & EMU_FLAG_ENABLED`.
+      emu->flags = 0; // Reset all flags. Must be easy to check instead of: `flags & EMU_FLAG_ENABLED`.
       continue;
     }
     syslog(LOG_INFO, "Emu `%s` is enabled.", emu->name);
 
     if (emu->type == EmuTypeEmp) {
       if (!live) {
-        emu->flags &= ~(EMU_FLAG_LIVE | EMU_FLAG_FIND_NAME);
-        emu->flags |= EMU_FLAG_NON_LIVE;
+        emu->flags &= ~(EMU_FLAG_MIGRATE_LIVE | EMU_FLAG_WAIT_LIVE_STAGE_DONE);
+        emu->flags |= EMU_FLAG_MIGRATE_NON_LIVE;
       }
     } else if (emu->type == EmuTypeQmpLibxl && (!live || mode == EmuModeHvmRestore || mode == EmuModeRestore))
       emu->flags = 0; // Disable QMP emu because it is unused in restore mode.
@@ -947,8 +1012,8 @@ int emu_manager_clean () {
     arg_list_free(emu->arguments);
     emu->arguments = NULL;
 
-    free(emu->progress.eventResult);
-    emu->progress.eventResult = NULL;
+    free(emu->progress.result);
+    emu->progress.result = NULL;
   }
   return 0;
 }
@@ -972,10 +1037,10 @@ int emu_manager_restore () {
     }
 
     foreach (emu, Emus) {
-      if (emu->state != EMU_STATE_RESULT_AVAILABLE)
+      if (emu->state != EMU_STATE_MIGRATION_DONE)
         continue;
 
-      if (control_send_result(emu->name, emu->progress.eventResult) < 0)
+      if (control_send_result(emu->name, emu->progress.result) < 0)
         return -1;
 
       emu->state = EMU_STATE_COMPLETED;
@@ -989,67 +1054,35 @@ int emu_manager_restore () {
 int emu_manager_save (bool live) {
   EMU_LOG_PHASE();
 
-  Emu *emu;
-
-  if (live && emu_manager_request_track() < 0)
+  // 1. Trying to copy a lot of dirty pages in the first Xen iterations.
+  if (live && (
+    emu_manager_request_track() < 0 ||
+    emu_manager_migrate_live() < 0 ||
+    emu_manager_wait_live_stage_done() < 0
+  ))
     goto fail;
 
-  if (emu_manager_migrate_live() < 0)
+  // 2. Suspend and copy the remaining dirty RAM pages in the last iteration.
+  if (
+    control_send_suspend() < 0 ||
+    emu_manager_migrate_paused() < 0 ||
+    emu_manager_wait_migrate_live_finished() < 0
+  )
     goto fail;
 
-  syslog(LOG_DEBUG, "Phase: wait until ready");
-  if (emu_manager_process(emu_process_cb_wait_initialized) < 0)
+  // 3. Migrate emus without live mode. So... No iteration.
+  if (emu_manager_migrate_non_live() < 0)
     goto fail;
 
-  syslog(LOG_DEBUG, "Phase: control_send_suspend");
-  if (control_send_suspend() < 0)
-    goto fail;
-
-  // TODO: Rename phases and/or functions.
-  syslog(LOG_DEBUG, "Phase: pause_emus");
-  foreach (emu, Emus)
-    if ((emu->flags & EMU_FLAG_PAUSE) && emu_client_send_emp_cmd(emu->client, cmd_migrate_pause, NULL) < 0)
-      goto fail;
-
-  syslog(LOG_DEBUG, "Phase: migrate_paused");
-  foreach (emu, Emus)
-    if ((emu->flags & EMU_FLAG_MIGRATE_PAUSED) && emu_client_send_emp_cmd(emu->client, cmd_migrate_paused, NULL) < 0)
-      goto fail;
-
-  syslog(LOG_DEBUG, "Phase: wait until live finished");
-  if (emu_manager_process(emu_process_cb_wait_live_finished) < 0)
-    goto fail;
-
-  syslog(LOG_DEBUG, "Phase: save_nonlive_one_by_one");
-  foreach (emu, Emus) {
-    if (!(emu->flags & EMU_FLAG_NON_LIVE))
-      continue;
-
-    if (
-      emu_set_stream_busy(emu, true) < 0 ||
-      control_send_prepare(emu->name) < 0 ||
-      control_receive_and_process_messages(120000) < 0 ||
-      emu_client_send_emp_cmd(emu->client, cmd_migrate_nonlive, NULL) < 0
-    )
-      goto fail;
-
-    while (emu->flags != EMU_STATE_RESULT_AVAILABLE) {
-      if (emu_manager_poll() < 0 && EmuError != ETIME) {
-        syslog(LOG_ERR, "Error waiting for events: `%s`.", strerror(EmuError));
-        goto fail;
-      }
-      if (emu_manager_send_progress() < 0)
-        goto fail;
-    }
-  }
-
-  syslog(LOG_DEBUG, "Phase: send_final_result");
+  // 4. Send final migration result to xenopsd.
   if (control_send_final_result() < 0)
     goto fail;
 
   return 0;
 
-  fail:
+fail:
+  {
+    Emu *emu;
     foreach (emu, Emus) {
       if (
         emu->flags &&
@@ -1060,6 +1093,7 @@ int emu_manager_save (bool live) {
       )
         syslog(LOG_ERR, "Failed to call cmd_migrate_abort: `%s`.", strerror(EmuError));
     }
+  }
 
   return -1;
 }

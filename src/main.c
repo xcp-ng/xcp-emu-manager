@@ -190,6 +190,7 @@ int main (int argc, char *argv[]) {
       } break;
       case MAIN_OPT_FORK:
         // TODO: Find the fork usage?
+        syslog(LOG_INFO, "Called with fork argument: `--fork %s`.", optarg);
         break;
       case MAIN_OPT_DEBUG:
         debugMode = true;
@@ -253,7 +254,7 @@ int main (int argc, char *argv[]) {
   syslog(LOG_INFO, "Startup: domid %u.", domId);
   syslog(LOG_INFO, "Startup: operation mode (%s, %s).", modes[mode], live ? "live" : "non-live");
 
-  syslog(LOG_DEBUG, "Configuring Xenopsd...");
+  syslog(LOG_DEBUG, "Configuring xenopsd...");
   if (control_init(controlInFd, controlOutFd) < 0)
     return EXIT_FAILURE;
 
@@ -267,16 +268,12 @@ int main (int argc, char *argv[]) {
 
   int error = 0;
 
-  if (emu_manager_configure(live, mode) < 0)
-    goto fail;
-
-  if (emu_manager_fork(domId) < 0)
-    goto fail;
-
-  if (emu_manager_connect(domId) < 0)
-    goto fail;
-
-  if (emu_manager_init() < 0)
+  if (
+    emu_manager_configure(live, mode) < 0 ||
+    emu_manager_fork(domId) < 0 ||
+    emu_manager_connect(domId) < 0 ||
+    emu_manager_init() < 0
+  )
     goto fail;
 
   if (
