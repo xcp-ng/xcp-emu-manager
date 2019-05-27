@@ -260,7 +260,7 @@ int main (int argc, char *argv[]) {
 
   if (
     (mode == EmuModeSave || mode == EmuModeRestore) &&
-    arg_list_append_bool(&xenguestEmu->arguments, "pv", true) < 0
+    arg_list_append_str(&xenguestEmu->arguments, "pv", "true") < 0
   ) {
     syslog(LOG_ERR, "Failed to add pv argument: `%s`.", strerror(errno));
     return EXIT_FAILURE;
