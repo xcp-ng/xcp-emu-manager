@@ -48,6 +48,33 @@ static void usage (const char *progname) {
   puts("  --help                   print this help and exit");
 }
 
+static void set_crash_handler (XcpCrashHandler handler);
+
+static void crash_handler (int signal) {
+  syslog(LOG_ERR, "crash_handler called with signal %d.", signal);
+  set_crash_handler(SIG_DFL);
+
+  void *buffer[128];
+  const int size = xcp_stacktrace(buffer, XCP_ARRAY_LEN(buffer));
+
+  char **strings = xcp_stacktrace_symbols(buffer, (size_t)size);
+  if (!strings)
+    return;
+
+  for (int i = 0; i < size; ++i)
+    syslog(LOG_ERR, "%s", strings[i]);
+
+  free(strings);
+}
+
+static void set_crash_handler (XcpCrashHandler handler) {
+  signal(SIGBUS, handler);
+  signal(SIGFPE, handler);
+  signal(SIGSEGV, handler);
+  signal(SIGSYS, handler);
+  signal(SIGXCPU, handler);
+}
+
 // -----------------------------------------------------------------------------
 
 #define MAIN_OPT_DEBUG 1
@@ -56,6 +83,7 @@ static void usage (const char *progname) {
 
 int main (int argc, char *argv[]) {
   openlog(argv[0], LOG_PID, LOG_USER | LOG_MAIL);
+  set_crash_handler(crash_handler);
 
   const struct option longopts[] = {
     { "domid", 1, NULL, 'd' },
