@@ -137,6 +137,8 @@ static inline int control_process_messages () {
         emu->state = EMU_STATE_RESTORING;
         if (emu_set_stream_busy(emu, true) > -1 && emu_client_send_emp_cmd(emu->client, cmd_restore, NULL) > -1)
           ++processedMessages;
+        else
+          error = EmuError;
       }
     } else if (!strcmp(message, "abort")) {
       syslog(LOG_DEBUG, "Received abort command from xenopsd.");
