@@ -35,8 +35,9 @@ static inline ArgNode *arg_list_create_node () {
 
 static inline void arg_list_append (ArgNode **head, ArgNode *node) {
   if (*head) {
-    for (; (*head)->next; *head = (*head)->next);
-    (*head)->next = node;
+    ArgNode *it = *head;
+    for (; it->next; it = it->next);
+    it->next = node;
   } else
     *head = node;
 }
