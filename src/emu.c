@@ -1081,20 +1081,37 @@ int emu_manager_save (bool live) {
 
 fail:
   {
-    Emu *emu;
-    foreach (emu, Emus) {
-      if (
-        emu->flags &&
-        emu->type == EmuTypeEmp &&
-        emu->client &&
-        emu->client->fd > -1 &&
-        emu_client_send_emp_cmd(emu->client, cmd_migrate_abort, NULL) < 0
-      )
-        syslog(LOG_ERR, "Failed to call cmd_migrate_abort: `%s`.", strerror(EmuError));
+    // Cache first error.
+    int error = EmuError;
+    emu_manager_abort_save();
+    EmuError = error;
+  }
+  return -1;
+}
+
+int emu_manager_abort_save () {
+  int error = 0;
+
+  Emu *emu;
+  foreach (emu, Emus) {
+    if (
+      emu->flags &&
+      emu->type == EmuTypeEmp &&
+      emu->client &&
+      emu->client->fd > -1 &&
+      emu_client_send_emp_cmd(emu->client, cmd_migrate_abort, NULL) < 0
+    ) {
+      syslog(LOG_ERR, "Failed to call cmd_migrate_abort: `%s`.", strerror(EmuError));
+      if (!error)
+        error = EmuError;
     }
   }
 
-  return -1;
+  if (error) {
+    EmuError = error;
+    return -1;
+  }
+  return 0;
 }
 
 // -----------------------------------------------------------------------------

@@ -267,16 +267,19 @@ int control_send_final_result () {
   return 0;
 }
 
-int control_report_error (int errorCode) {
+int control_report_error (int emuErrorCode) {
   const char *emuName = NULL;
   Emu *emu = emu_manager_find_first_failed();
   if (emu) {
-    errorCode = emu->errorCode;
+    emuErrorCode = emu->errorCode;
     emuName = emu->name;
   }
 
+  if (!emuName)
+    emuName = "";
+
   char buf[128];
-  if (snprintf(buf, sizeof buf, "error:%s%s%s\n", emuName ? emuName : "", emuName ? " " : "", emu_error_code_to_str(errorCode)) < 0) {
+  if (snprintf(buf, sizeof buf, "error:%s%s%s\n", emuName, *emuName ? " " : "", emu_error_code_to_str(emuErrorCode)) < 0) {
     syslog(LOG_ERR, "Unable to report error: `%s`.", strerror(errno));
     EmuError = errno;
     return -1;
