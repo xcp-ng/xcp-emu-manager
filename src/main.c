@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <unistd.h>
 
 #include <xcp-ng/generic.h>
 
@@ -32,6 +33,31 @@
 #include "emu.h"
 
 // =============================================================================
+
+static int Mode = -1;
+
+// -----------------------------------------------------------------------------
+
+static int clean_migration (int error) {
+  if (Mode == EmuModeSave || Mode == EmuModeHvmSave)
+    if (emu_manager_abort_save() < 0 && !error)
+      error = EmuError; // Update error only if there is no previous error!
+
+  if (emu_manager_disconnect() < 0 && !error)
+    error = EmuError; // Same idea.
+
+  // Ignore errors of emu_manager_wait_termination.
+  emu_manager_wait_termination();
+  emu_manager_clean();
+
+  if (error == ESHUTDOWN || !error)
+    return 0;
+
+  control_report_error(error);
+  return -1;
+}
+
+// -----------------------------------------------------------------------------
 
 static void usage (const char *progname) {
   printf("Usage: %s [OPTIONS]\n", progname);
@@ -48,9 +74,12 @@ static void usage (const char *progname) {
   puts("  --help                   print this help and exit");
 }
 
+// -----------------------------------------------------------------------------
+
 static void set_crash_handler (XcpCrashHandler handler);
 
 static void crash_handler (int signal) {
+  // 1. Print stacktrace.
   syslog(LOG_ERR, "crash_handler called with signal %d.", signal);
   set_crash_handler(SIG_DFL);
 
@@ -65,6 +94,10 @@ static void crash_handler (int signal) {
     syslog(LOG_ERR, "%s", strings[i]);
 
   free(strings);
+
+  // 2. How to properly crash? Abort migration + clean resources.
+  clean_migration(EmuErrorKilled);
+  _exit(128 + signal);
 }
 
 static void set_crash_handler (XcpCrashHandler handler) {
@@ -112,8 +145,6 @@ int main (int argc, char *argv[]) {
   assert(xenguestEmu);
 
   // 1. Parse arguments.
-  int mode = -1;
-
   bool soFarSoGood;
 
   uint domId = (uint)-1;
@@ -184,7 +215,7 @@ int main (int argc, char *argv[]) {
         }
         break;
       case 'm':
-        if ((mode = (int)xcp_str_arr_index_of(modes, XCP_ARRAY_LEN(modes), optarg)) == -1) {
+        if ((Mode = (int)xcp_str_arr_index_of(modes, XCP_ARRAY_LEN(modes), optarg)) == -1) {
           syslog(LOG_ERR, "Unknown mode: `%s`.", optarg);
           return EXIT_FAILURE;
         }
@@ -237,7 +268,7 @@ int main (int argc, char *argv[]) {
   }
 
   // 2. Checking and using arguments as config.
-  if (mode == -1) {
+  if (Mode == -1) {
     syslog(LOG_ERR, "Operation mode is not set!");
     return EXIT_FAILURE;
   }
@@ -280,14 +311,14 @@ int main (int argc, char *argv[]) {
 
   syslog(LOG_INFO, "Startup: xenopsd control fds (%d, %d).", controlInFd, controlOutFd);
   syslog(LOG_INFO, "Startup: domid %u.", domId);
-  syslog(LOG_INFO, "Startup: operation mode (%s, %s).", modes[mode], live ? "live" : "non-live");
+  syslog(LOG_INFO, "Startup: operation mode (%s, %s).", modes[Mode], live ? "live" : "non-live");
 
   syslog(LOG_DEBUG, "Configuring xenopsd...");
   if (control_init(controlInFd, controlOutFd) < 0)
     return EXIT_FAILURE;
 
   if (
-    (mode == EmuModeSave || mode == EmuModeRestore) &&
+    (Mode == EmuModeSave || Mode == EmuModeRestore) &&
     arg_list_append_str(&xenguestEmu->arguments, "pv", "true") < 0
   ) {
     syslog(LOG_ERR, "Failed to add pv argument: `%s`.", strerror(errno));
@@ -297,7 +328,7 @@ int main (int argc, char *argv[]) {
   int error = 0;
 
   if (
-    emu_manager_configure(live, mode) < 0 ||
+    emu_manager_configure(live, Mode) < 0 ||
     emu_manager_fork(domId) < 0 ||
     emu_manager_connect(domId) < 0 ||
     emu_manager_init() < 0
@@ -305,7 +336,7 @@ int main (int argc, char *argv[]) {
     goto fail;
 
   if (
-    (mode == EmuModeHvmRestore || mode == EmuModeRestore)
+    (Mode == EmuModeHvmRestore || Mode == EmuModeRestore)
       ? emu_manager_restore() < 0
       : emu_manager_save(live) < 0
   )
@@ -318,16 +349,7 @@ fail:
   error = EmuError;
 
 end:
-  if (emu_manager_disconnect() < 0 && !error)
-    error = EmuError; // Update error only if there is no previous error!
-
-  // Ignore errors of emu_manager_wait_termination.
-  emu_manager_wait_termination();
-  emu_manager_clean();
-
-  if (error == ESHUTDOWN || !error)
-    return EXIT_SUCCESS;
-
-  control_report_error(error);
-  return EXIT_FAILURE;
+  if (clean_migration(error) < 0)
+    return EXIT_FAILURE;
+  return EXIT_SUCCESS;
 }

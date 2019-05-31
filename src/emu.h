@@ -179,6 +179,7 @@ int emu_manager_clean ();
 
 int emu_manager_restore ();
 int emu_manager_save (bool live);
+int emu_manager_abort_save ();
 
 Emu *emu_manager_find_first_failed ();
 
