@@ -50,18 +50,13 @@ endif ()
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake")
 
-# TODO: Add libpthread as deps of libempserver and remove it of LIBS.
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-
+find_package(Emp REQUIRED)
 find_package(JsonC REQUIRED)
 find_package(XcpNgGeneric 1.1.0 REQUIRED)
 
-# TODO: Provide a Cmake config file for libempserver.
 set(LIBS
-  /usr/lib64/libempserver.so
+  Emp::Emp
   JsonC::JsonC
-  Threads::Threads
   XcpNg::Generic
 )
 
