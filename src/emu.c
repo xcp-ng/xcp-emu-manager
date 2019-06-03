@@ -594,10 +594,12 @@ int emu_create_stream (Emu *emu, int fd) {
     goto fail;
   }
 
+  // If fd is a socket (migration case: save/restore), no problem.
   if (!S_ISSOCK(buf.st_mode)) {
     const int flags = fcntl(fd, F_GETFL);
     if (flags < 0) goto fail;
-    if ((flags & O_ACCMODE) != O_RDONLY && !(flags & O_NOCTTY)) {
+    // Ensure we can write and append data in the file (suspend case).
+    if ((flags & O_ACCMODE) != O_RDONLY && !(flags & O_APPEND)) {
       syslog(LOG_ERR, "File descriptor %d is a file with flags: %x.", fd, flags);
       EmuError = ENOSTR;
       goto fail;
