@@ -401,7 +401,7 @@ static int emu_connect (Emu *emu, uint domId) {
   char buf[64];
   EmuClientCb eventCb = NULL;
   if (emu->type == EmuTypeEmp) {
-    if (snprintf(buf, sizeof buf, "/var/xen/%s/%d/control", emu->name, domId) < 0) {
+    if (snprintf(buf, sizeof buf, "/run/xen/%s-control-%d", emu->name, domId) < 0) {
       EmuError = errno;
       goto fail;
     }
