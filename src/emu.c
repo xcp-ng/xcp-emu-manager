@@ -594,8 +594,10 @@ int emu_create_stream (Emu *emu, int fd) {
     goto fail;
   }
 
-  // If fd is a socket (migration case: save/restore), no problem.
-  if (!S_ISSOCK(buf.st_mode)) {
+  // If fd is a socket or a pipe (migration case: save/restore), no problem,
+  // we have finished creating the stream, otherwise we must check the write flags
+  // of the fd file.
+  if (!S_ISSOCK(buf.st_mode) && !S_ISFIFO(buf.st_mode)) {
     const int flags = fcntl(fd, F_GETFL);
     if (flags < 0) {
       EmuError = errno;
