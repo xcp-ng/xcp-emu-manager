@@ -20,6 +20,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libempserver.h>
+#include <limits.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -397,22 +399,27 @@ static int emu_fork_emp_client (Emu *emu, uint domId) {
 static int emu_connect (Emu *emu, uint domId) {
   if (!emu->flags) return 0;
 
-  // Do not check snprintf truncation. Buffer size is normally sufficient.
-  char buf[64];
+  char buf[PATH_MAX];
   EmuClientCb eventCb = NULL;
+  int path_len = 0;
   if (emu->type == EmuTypeEmp) {
-    if (snprintf(buf, sizeof buf, "/run/xen/%s-control-%d", emu->name, domId) < 0) {
-      EmuError = errno;
-      goto fail;
-    }
+    path_len = emp_get_default_path(buf, sizeof buf, emu->name, (int)domId);
     eventCb = emu_client_event_cb_emp;
   } else if (emu->type == EmuTypeQmpLibxl) {
-    if (snprintf(buf, sizeof buf, "/var/run/xen/qmp-libxl-%d", domId) < 0) {
-      EmuError = errno;
-      goto fail;
-    }
+    path_len = snprintf(buf, sizeof buf, "/var/run/xen/qmp-libxl-%d", domId);
     eventCb = emu_client_event_cb_qmp_libxl;
   }
+
+  if (path_len < 0) {
+    EmuError = errno;
+    goto fail;
+  }
+
+  if (path_len >= (int)sizeof buf) {
+    EmuError = ENOMEM;
+    goto fail;
+  }
+
   assert(eventCb);
   syslog(LOG_INFO, "Connecting to `%s` (%s)...", emu->name, buf);
 
