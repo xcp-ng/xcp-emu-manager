@@ -39,6 +39,17 @@
 
 #define EMU_LOG_PHASE() syslog(LOG_DEBUG, "Phase: %s", __func__)
 
+#define MIGRATION_IT_GRACE_COUNT 1
+#define MIGRATION_IT_MAX_WITHOUT_PROGRESS 3
+#define MIGRATION_IT_MAX 10
+
+// Amount of RAM remaining before exiting live mode during a migration.
+// Not totally arbitrary,determined by looking at the average time taken to migrate
+// the remaining RAM pages on various pools.
+// We estimate this is a low enough value to be migrated in less than a second.
+// Also it is difficult to use a smaller value if there is a lot of activity on the VM to migrate.
+#define LIVE_MIGRATION_REMAINING_LIMIT 16384
+
 static int emu_manager_process (bool (*cb)(Emu *emu));
 
 // =============================================================================
@@ -234,10 +245,20 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
   if (iterationValue < 0 && remainingValue < 0)
     return 0;
 
-  if (iterationValue == 0 && remainingValue == 0)
+  if (iterationValue == 0 && remainingValue == 0) {
     remainingValue = -1;
-  else if (remainingValue != -1) {
+  } else if (remainingValue != -1) {
     progress->sent = sentValue;
+    if (iterationValue > 0 && progress->remaining < remainingValue) {
+      syslog(
+        LOG_INFO,
+        "No migration progress during live stage `%s` (prev=%" PRId64", current=%" PRId64 ").",
+        client->emu->name,
+        progress->remaining,
+        remainingValue
+      );
+      ++progress->iterationWithoutProgress;
+    }
     progress->remaining = remainingValue;
     progress->iteration = iterationValue;
   }
@@ -255,12 +276,13 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
     sentProgress
   );
 
-  // TODO: Check better remaining value.
-  if (
-    iterationValue > 0 &&
-    (remainingValue <= 50 || iterationValue >= 4) &&
-    client->emu->state != EMU_STATE_LIVE_STAGE_DONE
-  ) {
+  if (iterationValue <= 0 || client->emu->state == EMU_STATE_LIVE_STAGE_DONE)
+    return 0;
+
+  if ((iterationValue >= MIGRATION_IT_GRACE_COUNT && (
+    progress->iterationWithoutProgress >= MIGRATION_IT_MAX_WITHOUT_PROGRESS ||
+    iterationValue >= MIGRATION_IT_MAX
+  )) || (remainingValue >= 0 && remainingValue <= LIVE_MIGRATION_REMAINING_LIMIT)) {
     syslog(LOG_INFO, "`%s` live stage is done!", client->emu->name);
     client->emu->state = EMU_STATE_LIVE_STAGE_DONE;
   }

@@ -115,6 +115,8 @@ typedef struct EmuMigrationProgress {
   // And: https://www.usenix.org/legacy/event/nsdi05/tech/full_papers/clark/clark.pdf
   int iteration;
 
+  int iterationWithoutProgress;
+
   // Used to smooth progress report when remaining is unknown.
   // See: https://github.com/xcp-ng-rpms/libempserver (emp.h => mid iteration)
   int64_t sentMidIteration;
