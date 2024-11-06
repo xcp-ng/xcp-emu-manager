@@ -27,7 +27,7 @@
 // =============================================================================
 
 static inline ArgNode *arg_list_create_node () {
-  ArgNode *node = calloc(sizeof *node, 1);
+  ArgNode *node = calloc(1, sizeof *node);
   if (!node)
     syslog(LOG_ERR, "Unable to alloc list node.");
   return node;
