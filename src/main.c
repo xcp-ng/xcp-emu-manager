@@ -39,7 +39,7 @@ static int Mode = -1;
 // -----------------------------------------------------------------------------
 
 static int clean_migration (int error) {
-  if (Mode == EmuModeSave || Mode == EmuModeHvmSave)
+  if (error && (Mode == EmuModeSave || Mode == EmuModeHvmSave))
     if (emu_manager_abort_save() < 0 && !error)
       error = EmuError; // Update error only if there is no previous error!
 
