@@ -258,7 +258,7 @@ static int emu_client_event_cb_emp (EmuClient *client, const char *eventType, co
   // TODO: Check better remaining value.
   if (
     iterationValue > 0 &&
-    (remainingValue <= 50 || iterationValue >= 4) &&
+    ((remainingValue >= 0 && remainingValue <= 50) || iterationValue >= 4) &&
     client->emu->state != EMU_STATE_LIVE_STAGE_DONE
   ) {
     syslog(LOG_INFO, "`%s` live stage is done!", client->emu->name);
