@@ -821,7 +821,7 @@ static inline int emu_manager_wait_live_stage_done () {
   return emu_manager_process(emu_process_cb_wait_live_stage_done);
 }
 
-static inline int emu_manager_migrate_paused () {
+static inline int emu_manager_migrate_pause () {
   EMU_LOG_PHASE();
 
   Emu *emu;
@@ -829,6 +829,13 @@ static inline int emu_manager_migrate_paused () {
     if ((emu->flags & EMU_FLAG_MIGRATE_PAUSED) && emu_client_send_emp_cmd(emu->client, cmd_migrate_pause, NULL) < 0)
       return -1;
 
+  return 0;
+}
+
+static inline int emu_manager_migrate_paused () {
+  EMU_LOG_PHASE();
+
+  Emu *emu;
   foreach (emu, Emus)
     if ((emu->flags & EMU_FLAG_MIGRATE_PAUSED) && emu_client_send_emp_cmd(emu->client, cmd_migrate_paused, NULL) < 0)
       return -1;
@@ -1077,6 +1084,7 @@ int emu_manager_save (bool live) {
 
   // 2. Suspend and copy the remaining dirty RAM pages in the last iteration.
   if (
+    emu_manager_migrate_pause() < 0 ||
     control_send_suspend() < 0 ||
     emu_manager_migrate_paused() < 0 ||
     emu_manager_wait_migrate_live_finished() < 0
