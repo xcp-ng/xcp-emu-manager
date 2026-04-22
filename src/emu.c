@@ -1104,12 +1104,6 @@ int emu_manager_save (bool live) {
   return 0;
 
 fail:
-  {
-    // Cache first error.
-    int error = EmuError;
-    emu_manager_abort_save();
-    EmuError = error;
-  }
   return -1;
 }
 
