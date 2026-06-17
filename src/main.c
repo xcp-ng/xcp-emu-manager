@@ -67,6 +67,7 @@ static void usage (const char *progname) {
   puts("  --controloutfd           control output descriptor");
   puts("  --store_port             store port");
   puts("  --console_port           console port");
+  puts("  --mem_pnode              NUMA node for memory placement");
   puts("  --live                   enable live migration");
   puts("  --mode                   migration mode");
   puts("  --dm                     device model");
@@ -113,6 +114,7 @@ static void set_crash_handler (XcpCrashHandler handler) {
 #define MAIN_OPT_DEBUG 1
 #define MAIN_OPT_DEVICE_MODEL 2
 #define MAIN_OPT_FORK 3
+#define MAIN_OPT_MEM_PNODE 4
 
 int main (int argc, char *argv[]) {
   openlog(argv[0], LOG_PID, LOG_USER | LOG_MAIL);
@@ -129,6 +131,7 @@ int main (int argc, char *argv[]) {
     { "mode", 1, NULL, 'm' },
     { "dm", 1, NULL, MAIN_OPT_DEVICE_MODEL },
     { "fork", 1, NULL, MAIN_OPT_FORK },
+    { "mem_pnode", 1, NULL, MAIN_OPT_MEM_PNODE },
     { "debug", 0, NULL, MAIN_OPT_DEBUG },
     { "help", 0, NULL, 'h' },
     { NULL, 0, 0, 0 }
@@ -201,6 +204,12 @@ int main (int argc, char *argv[]) {
       case 'c':
         if (arg_list_append_str(&xenguestEmu->arguments, "console_port", optarg) < 0) {
           syslog(LOG_ERR, "Failed to add console_port argument: `%s`.", strerror(errno));
+          return EXIT_FAILURE;
+        }
+        break;
+      case MAIN_OPT_MEM_PNODE:
+        if (arg_list_append_str(&xenguestEmu->arguments, "mem_pnode", optarg) < 0) {
+          syslog(LOG_ERR, "Failed to add mem_pnode argument: `%s`.", strerror(errno));
           return EXIT_FAILURE;
         }
         break;
