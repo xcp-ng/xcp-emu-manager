@@ -42,9 +42,13 @@ extern __thread int EmuError;
 // Live stage is done when it remains very few dirty pages to move.
 #define EMU_FLAG_WAIT_LIVE_STAGE_DONE (1 << 2)
 
-// Request the pause status for one emu. I.e. no data can be written by this emu.
-// Must be used after a migrate live call to migrate the remaining dirty pages.
-#define EMU_FLAG_MIGRATE_PAUSED (1 << 3)
+// Request the pause status for one emu. I.e. no further writes to its RAM may be made.
+// Must be used after a migrate live call.
+#define EMU_FLAG_MIGRATE_PAUSE (1 << 3)
+
+// Emu is paused. No further writes to its RAM are expected.
+// Must be used after a migrate pause call to migrate the remaining dirty pages.
+#define EMU_FLAG_MIGRATE_PAUSED (1 << 4)
 
 // Emu is migrated directly. More violent than live mode.
 #define EMU_FLAG_MIGRATE_NON_LIVE (1 << 5)
